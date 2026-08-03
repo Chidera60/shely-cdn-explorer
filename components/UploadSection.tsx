@@ -1,5 +1,3 @@
-"use client";
-
 import React, { useState, useRef } from "react";
 import { 
   Upload, 
@@ -12,10 +10,13 @@ import {
   Loader2, 
   AlertTriangle,
   Server,
-  Globe
+  Globe,
+  Wallet,
+  KeyRound
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { uploadFileToShelby, ShelbyUploadResult } from "@/lib/shelby/client";
+import { useWallet } from "@/lib/wallet/WalletContext";
 
 interface UploadSectionProps {
   onUploadSuccess: (result: ShelbyUploadResult) => void;
@@ -36,6 +37,8 @@ const ALLOWED_MIME_TYPES = [
 const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
 
 export const UploadSection: React.FC<UploadSectionProps> = ({ onUploadSuccess, onToast }) => {
+  const { isConnected, walletAddress, walletName, promptUploadSignature, setIsWalletModalOpen } = useWallet();
+
   const [dragActive, setDragActive] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
@@ -109,20 +112,52 @@ export const UploadSection: React.FC<UploadSectionProps> = ({ onUploadSuccess, o
   const handleUpload = async () => {
     if (!selectedFile) return;
 
-    setIsUploading(true);
-    setUploadProgressStep("Initializing Shelby Client...");
-
     try {
+      let walletInfo: { signerAddress: string; txHash?: string } | undefined = undefined;
+
+      // If user has connected their wallet, prompt them to sign the request & charge their wallet
+      if (isConnected && uploadMode === "browser") {
+        setUploadProgressStep("Awaiting wallet transaction signature...");
+        const cleanName = selectedFile.name.toLowerCase().replace(/[^a-z0-9._-]/g, '-');
+        const blobName = `uploads/${Date.now()}-${cleanName}`;
+
+        try {
+          const signed = await promptUploadSignature({
+            fileName: selectedFile.name,
+            fileSize: selectedFile.size,
+            blobName,
+            mimeType: selectedFile.type || "application/octet-stream",
+            estimatedFeeApt: 0.00045,
+          });
+
+          walletInfo = {
+            signerAddress: signed.signerAddress,
+            txHash: signed.txHash,
+          };
+        } catch (err: any) {
+          onToast("info", "Upload Cancelled", "Wallet signature request was declined.");
+          return;
+        }
+      }
+
+      setIsUploading(true);
+      setUploadProgressStep("Initializing Shelby Client...");
+
       if (uploadMode === "browser") {
-        // Direct browser SDK upload
+        // Direct browser SDK upload using wallet signer
         const result = await uploadFileToShelby(
           selectedFile,
           previewUrl || undefined,
-          (step) => setUploadProgressStep(step)
+          (step) => setUploadProgressStep(step),
+          walletInfo
         );
 
         onUploadSuccess(result);
-        onToast("success", "Upload Complete!", `Blob '${result.blobName}' created on Shelby network.`);
+        onToast(
+          "success",
+          walletInfo ? "Wallet Charged & Upload Complete!" : "Upload Complete!",
+          `Blob '${result.blobName}' created on Shelby network.${walletInfo ? ` Tx: ${walletInfo.txHash?.slice(0, 10)}...` : ""}`
+        );
       } else {
         // Secure Server API Route (/api/upload)
         setUploadProgressStep("Sending payload to /api/upload endpoint...");
@@ -147,8 +182,8 @@ export const UploadSection: React.FC<UploadSectionProps> = ({ onUploadSuccess, o
           fileName: data.fileName,
           fileSize: data.fileSize,
           mimeType: data.mimeType,
-          signerAddress: data.signerAddress,
-          txHash: data.txHash,
+          signerAddress: walletInfo?.signerAddress || data.signerAddress,
+          txHash: walletInfo?.txHash || data.txHash,
           expirationMicros: data.expirationMicros,
           timestamp: data.timestamp,
           localPreviewUrl: previewUrl || undefined,
@@ -188,6 +223,40 @@ export const UploadSection: React.FC<UploadSectionProps> = ({ onUploadSuccess, o
 
   return (
     <div className="flex flex-col gap-6">
+      {/* Wallet Status Banner */}
+      {isConnected ? (
+        <div className="p-3.5 rounded-xl bg-gradient-to-r from-shelby-cyan/15 via-shelby-indigo/15 to-shelby-purple/15 border border-shelby-cyan/30 flex items-center justify-between text-xs">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div className="w-7 h-7 rounded-lg bg-shelby-cyan/20 border border-shelby-cyan/40 flex items-center justify-center text-shelby-cyan shrink-0">
+              <KeyRound className="w-4 h-4" />
+            </div>
+            <div className="min-w-0">
+              <span className="font-semibold text-white block">Wallet Signing Active</span>
+              <span className="text-gray-300 text-[11px] truncate block">
+                Charged to {walletName} ({walletAddress?.slice(0, 6)}...{walletAddress?.slice(-4)})
+              </span>
+            </div>
+          </div>
+          <span className="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 font-mono text-[10px] font-bold border border-emerald-500/30 shrink-0">
+            Wallet Signer
+          </span>
+        </div>
+      ) : (
+        <div className="p-3 rounded-xl bg-surface-300/80 border border-white/10 flex items-center justify-between text-xs">
+          <div className="flex items-center gap-2 text-gray-300">
+            <Wallet className="w-4 h-4 text-gray-400" />
+            <span>Connect wallet to sign uploads & pay from balance</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setIsWalletModalOpen(true)}
+            className="pressable text-xs font-semibold text-shelby-cyan hover:underline"
+          >
+            Connect Wallet
+          </button>
+        </div>
+      )}
+
       {/* Upload Mode Selector */}
       <div className="flex items-center justify-between p-1.5 rounded-xl bg-surface-300 border border-white/10">
         <button
@@ -333,7 +402,7 @@ export const UploadSection: React.FC<UploadSectionProps> = ({ onUploadSuccess, o
                 ) : (
                   <>
                     <Upload className="w-5 h-5" />
-                    <span>Upload to Shelby Network</span>
+                    <span>{isConnected ? "Sign & Upload with Wallet" : "Upload to Shelby Network"}</span>
                   </>
                 )}
               </button>

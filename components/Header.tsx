@@ -1,8 +1,8 @@
 "use client";
 
 import React from "react";
-import { Database, ShieldCheck, Zap, Globe, Sparkles } from "lucide-react";
-import { motion } from "framer-motion";
+import { Database, ShieldCheck, Zap, Globe } from "lucide-react";
+import { ConnectWalletButton } from "@/components/ConnectWalletButton";
 
 export const Header: React.FC = () => {
   return (
@@ -38,20 +38,19 @@ export const Header: React.FC = () => {
             </div>
           </div>
 
-          {/* Quick Metrics Badges */}
+          {/* Quick Metrics Badges & Connect Wallet */}
           <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
-            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-surface-200 border border-white/10 text-xs font-medium text-gray-300">
+            <div className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-surface-200 border border-white/10 text-xs font-medium text-gray-300">
               <Zap className="w-3.5 h-3.5 text-amber-400" />
               <span>Sub-second Latency</span>
             </div>
-            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-surface-200 border border-white/10 text-xs font-medium text-gray-300">
-              <ShieldCheck className="w-3.5 h-3.5 text-shelby-indigo" />
-              <span>Ephemeral Signer</span>
-            </div>
-            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-surface-200 border border-white/10 text-xs font-medium text-gray-300">
+            <div className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-surface-200 border border-white/10 text-xs font-medium text-gray-300">
               <Globe className="w-3.5 h-3.5 text-shelby-cyan" />
               <span>Edge CDN</span>
             </div>
+
+            {/* Connect Web3 Wallet Button */}
+            <ConnectWalletButton />
           </div>
 
         </div>
