@@ -1,6 +1,7 @@
 "use client";
 
 import React, { createContext, useContext, useState, useEffect } from "react";
+import { formatAptosAddress } from "@/lib/shelby/client";
 
 export type WalletType = "petra" | "pontem" | "standard" | "demo";
 
@@ -66,7 +67,7 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         if (parsed && parsed.address) {
           setState({
             isConnected: true,
-            walletAddress: parsed.address,
+            walletAddress: formatAptosAddress(parsed.address),
             walletName: parsed.name || "Shelby Demo Wallet",
             walletType: parsed.type || "demo",
             balance: parsed.balance ?? 12.45,
@@ -83,18 +84,18 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
     try {
       if (type === "demo") {
-        // Generate or retrieve persistent demo wallet address
+        // Generate or retrieve persistent demo wallet address (64 hex characters for Aptos)
         let demoAddress = "";
         if (typeof window !== "undefined") {
           const storedKey = localStorage.getItem("shelby_demo_wallet_address");
-          if (storedKey) {
-            demoAddress = storedKey;
+          if (storedKey && storedKey.length > 42) {
+            demoAddress = formatAptosAddress(storedKey);
           } else {
-            demoAddress = "0x" + Array.from({ length: 40 }, () => Math.floor(Math.random() * 16).toString(16)).join("");
+            demoAddress = formatAptosAddress("0x" + Array.from({ length: 64 }, () => Math.floor(Math.random() * 16).toString(16)).join(""));
             localStorage.setItem("shelby_demo_wallet_address", demoAddress);
           }
         } else {
-          demoAddress = "0x" + Array.from({ length: 40 }, () => Math.floor(Math.random() * 16).toString(16)).join("");
+          demoAddress = formatAptosAddress("0x" + Array.from({ length: 64 }, () => Math.floor(Math.random() * 16).toString(16)).join(""));
         }
 
         const walletData = {
@@ -128,7 +129,8 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       if (aptos) {
         const response = await aptos.connect();
         const account = await aptos.account();
-        const address = account?.address || response?.address || response?.account?.address;
+        const rawAddress = account?.address || response?.address || response?.account?.address;
+        const address = formatAptosAddress(rawAddress);
 
         const walletData = {
           address: address,
@@ -155,7 +157,7 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         return true;
       } else {
         // Extension not detected, automatically fall back to creating a dedicated testnet wallet for the user
-        let demoAddress = "0x" + Array.from({ length: 40 }, () => Math.floor(Math.random() * 16).toString(16)).join("");
+        let demoAddress = formatAptosAddress("0x" + Array.from({ length: 64 }, () => Math.floor(Math.random() * 16).toString(16)).join(""));
         const walletData = {
           address: demoAddress,
           name: type === "petra" ? "Petra Wallet (Testnet)" : type === "pontem" ? "Pontem Wallet (Testnet)" : "Aptos Wallet (Testnet)",

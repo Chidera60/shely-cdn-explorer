@@ -84,7 +84,9 @@ export async function POST(req: NextRequest) {
       console.warn('Shelby Node SDK direct upload notification:', e);
     }
 
-    const signerAddress = signer.accountAddress.toString();
+    let signerAddress = signer.accountAddress.toString().trim().toLowerCase();
+    if (signerAddress.startsWith('0x')) signerAddress = signerAddress.slice(2);
+    signerAddress = `0x${signerAddress.padStart(64, '0')}`;
     const publicUrl = `https://api.testnet.shelby.xyz/shelby/v1/blobs/${signerAddress}/${blobName}`;
 
     return NextResponse.json({

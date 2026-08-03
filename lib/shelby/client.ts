@@ -81,6 +81,19 @@ export function resetSignerAccount(): Account {
 }
 
 /**
+ * Format an Aptos account address into a standard 64-character hex string with 0x prefix.
+ * Official Shelby RPC endpoints validate account as a 32-byte Aptos address.
+ */
+export function formatAptosAddress(address: string): string {
+  if (!address) return address;
+  let clean = address.trim().toLowerCase();
+  if (clean.startsWith('0x')) {
+    clean = clean.slice(2);
+  }
+  return `0x${clean.padStart(64, '0')}`;
+}
+
+/**
  * Upload a file directly to the Shelby Decentralized Storage Network
  */
 export async function uploadFileToShelby(
@@ -102,7 +115,8 @@ export async function uploadFileToShelby(
   onProgress?.(walletInfo ? 'Applying wallet account signer...' : 'Obtaining Aptos account signer...');
   const signerStart = performance.now();
   const ephemeralSigner = getOrCreateSigner();
-  const signerAddress = walletInfo?.signerAddress || ephemeralSigner.accountAddress.toString();
+  const rawAddress = walletInfo?.signerAddress || ephemeralSigner.accountAddress.toString();
+  const signerAddress = formatAptosAddress(rawAddress);
   const signerMs = Math.round(performance.now() - signerStart);
 
   // Step 3: Prepare Blob Name & Metadata
@@ -135,7 +149,7 @@ export async function uploadFileToShelby(
   const uploadMs = Math.round(performance.now() - uploadStart);
   const totalMs = Math.round(performance.now() - startTime);
 
-  // Construct Public CDN & Explorer URLs using official Shelby Protocol endpoints
+  // Construct Public CDN & Explorer URLs using official Shelby Protocol endpoints (with formatted 64-character Aptos address)
   // Direct RPC Blob raw endpoint: https://api.testnet.shelby.xyz/shelby/v1/blobs/${account}/${blobName}
   const publicUrl = `https://api.testnet.shelby.xyz/shelby/v1/blobs/${signerAddress}/${blobName}`;
   const explorerUrl = getShelbyBlobExplorerUrl('testnet', signerAddress, blobName);
@@ -208,7 +222,7 @@ export function fetchByBlobName(blobName: string): ShelbyUploadResult {
   const isVideo = blobName.match(/\.(mp4|webm|mov)$/i);
   const mimeType = isImage ? 'image/png' : isVideo ? 'video/mp4' : 'application/pdf';
 
-  const signerAddress = '0x' + Array.from({ length: 40 }, () => Math.floor(Math.random() * 16).toString(16)).join('');
+  const signerAddress = formatAptosAddress('0x' + Array.from({ length: 64 }, () => Math.floor(Math.random() * 16).toString(16)).join(''));
   const publicUrl = `https://api.testnet.shelby.xyz/shelby/v1/blobs/${signerAddress}/${blobName}`;
   const explorerUrl = getShelbyBlobExplorerUrl('testnet', signerAddress, blobName);
 
