@@ -12,6 +12,7 @@ export interface PerformanceMetrics {
 export interface ShelbyUploadResult {
   id: string;
   publicUrl: string;
+  proxyUrl?: string;
   explorerUrl?: string;
   blobName: string;
   fileName: string;
@@ -152,11 +153,13 @@ export async function uploadFileToShelby(
   // Construct Public CDN & Explorer URLs using official Shelby Protocol endpoints (with formatted 64-character Aptos address)
   // Direct RPC Blob raw endpoint: https://api.testnet.shelby.xyz/shelby/v1/blobs/${account}/${blobName}
   const publicUrl = `https://api.testnet.shelby.xyz/shelby/v1/blobs/${signerAddress}/${blobName}`;
+  const proxyUrl = `/api/blob?account=${signerAddress}&blobName=${encodeURIComponent(blobName)}`;
   const explorerUrl = getShelbyBlobExplorerUrl('testnet', signerAddress, blobName);
 
   const uploadResult: ShelbyUploadResult = {
     id: `shelby_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`,
     publicUrl,
+    proxyUrl,
     explorerUrl,
     blobName,
     fileName: file.name,
@@ -224,11 +227,13 @@ export function fetchByBlobName(blobName: string): ShelbyUploadResult {
 
   const signerAddress = formatAptosAddress('0x' + Array.from({ length: 64 }, () => Math.floor(Math.random() * 16).toString(16)).join(''));
   const publicUrl = `https://api.testnet.shelby.xyz/shelby/v1/blobs/${signerAddress}/${blobName}`;
+  const proxyUrl = `/api/blob?account=${signerAddress}&blobName=${encodeURIComponent(blobName)}`;
   const explorerUrl = getShelbyBlobExplorerUrl('testnet', signerAddress, blobName);
 
   return {
     id: `retrieved_${Date.now()}`,
     publicUrl,
+    proxyUrl,
     explorerUrl,
     blobName,
     fileName: blobName.split('/').pop() || blobName,

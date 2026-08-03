@@ -218,7 +218,7 @@ curl -X GET "${asset.publicUrl}" \\
         </div>
       </div>
 
-      {/* 2. Public CDN URL & Explorer Link Box */}
+      {/* 2. Public CDN & Proxy URL Box */}
       <div className="p-4 rounded-2xl border border-shelby-cyan/30 bg-gradient-to-r from-surface-200 to-surface-300 backdrop-blur-xl relative overflow-hidden shadow-lg flex flex-col gap-3">
         <div className="flex items-center justify-between">
           <span className="text-xs font-bold text-shelby-cyan uppercase tracking-wider flex items-center gap-1.5">
@@ -257,6 +257,22 @@ curl -X GET "${asset.publicUrl}" \\
               <ExternalLink className="w-3.5 h-3.5 text-shelby-cyan" />
             </a>
           )}
+        </div>
+
+        <div className="pt-2 border-t border-white/5 flex flex-col gap-1.5 text-[11px] text-gray-400">
+          <div className="flex items-center justify-between font-mono">
+            <span>App Edge Proxy Route:</span>
+            <button
+              onClick={() => copyToClipboard(asset.proxyUrl || `/api/blob?account=${asset.signerAddress}&blobName=${asset.blobName}`, "url")}
+              className="pressable text-shelby-cyan hover:underline font-medium flex items-center gap-1"
+            >
+              <Copy className="w-3 h-3" />
+              <span>Copy Proxy Link ({asset.proxyUrl || `/api/blob?...`})</span>
+            </button>
+          </div>
+          <p className="text-[10px] text-gray-400/80 leading-relaxed italic">
+            Note: Public testnet RPC returns &quot;Blob not found&quot; until gas is paid &amp; indexers confirm on Aptos Testnet chain. Use preview or App Edge Proxy route for instant direct testing.
+          </p>
         </div>
       </div>
 
