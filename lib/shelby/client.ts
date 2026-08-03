@@ -1,5 +1,5 @@
 import { ShelbyClient, getShelbyBlobExplorerUrl } from '@shelby-protocol/sdk/browser';
-import { Network, Account } from '@aptos-labs/ts-sdk';
+import { Network, Account, Ed25519PrivateKey } from '@aptos-labs/ts-sdk';
 
 export interface PerformanceMetrics {
   readMs: number;
@@ -35,6 +35,8 @@ export function getShelbyBrowserClient(): ShelbyClient {
     network: NETWORK,
     apiKey: SHELBY_API_KEY,
   });
+}
+
 /**
  * Get or create a persistent ephemeral Aptos signer account.
  * Reusing the account across session uploads allows the user to fund it ONCE on Aptos testnet.
