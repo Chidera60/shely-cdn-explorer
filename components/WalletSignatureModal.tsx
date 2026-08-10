@@ -121,7 +121,7 @@ export const WalletSignatureModal: React.FC = () => {
 
             <div className="flex items-center justify-between p-2.5 rounded-lg bg-surface-400/50 border border-white/5">
               <span className="text-gray-400">Network Expiration</span>
-              <span className="text-gray-200">30 Days (Aptos Testnet DSN)</span>
+              <span className="text-gray-200">30 Days (Aptos Mainnet DSN)</span>
             </div>
           </div>
 

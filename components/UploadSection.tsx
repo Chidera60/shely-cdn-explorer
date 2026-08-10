@@ -194,7 +194,7 @@ export const UploadSection: React.FC<UploadSectionProps> = ({ onUploadSuccess, o
             totalMs: 135,
             estimatedLatencyMs: 20,
           },
-          network: "TESTNET",
+          network: "MAINNET",
         };
 
         onUploadSuccess(result);
@@ -419,7 +419,7 @@ export const UploadSection: React.FC<UploadSectionProps> = ({ onUploadSuccess, o
         </span>
         <span className="flex items-center gap-1.5">
           <AlertTriangle className="w-3.5 h-3.5 text-amber-400" />
-          Testnet auto-expiration: 30 days
+          Mainnet auto-expiration: 30 days
         </span>
       </div>
     </div>

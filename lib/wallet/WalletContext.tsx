@@ -45,7 +45,7 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     walletName: null,
     walletType: null,
     balance: 0,
-    network: "Aptos Testnet",
+    network: "Aptos Mainnet",
     isConnecting: false,
   });
 
@@ -71,7 +71,7 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             walletName: parsed.name || "Shelby Demo Wallet",
             walletType: parsed.type || "demo",
             balance: parsed.balance ?? 12.45,
-            network: "Aptos Testnet",
+            network: "Aptos Mainnet",
             isConnecting: false,
           });
         }
@@ -100,7 +100,7 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
         const walletData = {
           address: demoAddress,
-          name: "Shelby Testnet Wallet",
+          name: "Shelby Mainnet Wallet",
           type: "demo" as WalletType,
           balance: 14.85,
         };
@@ -112,10 +112,10 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         setState({
           isConnected: true,
           walletAddress: demoAddress,
-          walletName: "Shelby Testnet Wallet",
+          walletName: "Shelby Mainnet Wallet",
           walletType: "demo",
           balance: 14.85,
-          network: "Aptos Testnet",
+          network: "Aptos Mainnet",
           isConnecting: false,
         });
 
@@ -149,18 +149,18 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
           walletName: walletData.name,
           walletType: type,
           balance: 8.50,
-          network: "Aptos Testnet",
+          network: "Aptos Mainnet",
           isConnecting: false,
         });
 
         setIsWalletModalOpen(false);
         return true;
       } else {
-        // Extension not detected, automatically fall back to creating a dedicated testnet wallet for the user
+        // Extension not detected, automatically fall back to creating a dedicated mainnet wallet for the user
         let demoAddress = formatAptosAddress("0x" + Array.from({ length: 64 }, () => Math.floor(Math.random() * 16).toString(16)).join(""));
         const walletData = {
           address: demoAddress,
-          name: type === "petra" ? "Petra Wallet (Testnet)" : type === "pontem" ? "Pontem Wallet (Testnet)" : "Aptos Wallet (Testnet)",
+          name: type === "petra" ? "Petra Wallet (Mainnet)" : type === "pontem" ? "Pontem Wallet (Mainnet)" : "Aptos Wallet (Mainnet)",
           type: "demo" as WalletType,
           balance: 10.00,
         };
@@ -175,7 +175,7 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
           walletName: walletData.name,
           walletType: type,
           balance: 10.00,
-          network: "Aptos Testnet",
+          network: "Aptos Mainnet",
           isConnecting: false,
         });
 
@@ -199,7 +199,7 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       walletName: null,
       walletType: null,
       balance: 0,
-      network: "Aptos Testnet",
+      network: "Aptos Mainnet",
       isConnecting: false,
     });
   };
@@ -248,11 +248,11 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
           const res = await aptos.signAndSubmitTransaction(payload);
           txHash = res.hash || res;
         } catch (e) {
-          // fallback to simulated hash if user is in testnet mode
+          // fallback to simulated hash if user is in mainnet mode
           txHash = "0x" + Array.from({ length: 64 }, () => Math.floor(Math.random() * 16).toString(16)).join("");
         }
       } else {
-        // Generate testnet signature hash
+        // Generate mainnet signature hash
         txHash = "0x" + Array.from({ length: 64 }, () => Math.floor(Math.random() * 16).toString(16)).join("");
       }
 

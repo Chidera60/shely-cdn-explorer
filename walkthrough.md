@@ -6,7 +6,7 @@ We have built the **Shelby CDN Explorer**, a decentralized asset explorer and de
 
 1. **Header & Navigation ([components/Header.tsx](file:///home/fawaz/Documents/code/shely-cdn-explorer/components/Header.tsx))**:
    - Sleek dark theme UI with neon cyan & indigo radial glows.
-   - Active `TESTNET` network indicator badge and quick feature pills (Sub-second latency, Ephemeral signer, Edge CDN).
+   - Active `MAINNET` network indicator badge and quick feature pills (Sub-second latency, Ephemeral signer, Edge CDN).
 
 2. **Drag & Drop Upload Zone ([components/UploadSection.tsx](file:///home/fawaz/Documents/code/shely-cdn-explorer/components/UploadSection.tsx))**:
    - Drag-and-drop dropzone with animated hover states and file picker fallback.
@@ -40,7 +40,9 @@ We have built the **Shelby CDN Explorer**, a decentralized asset explorer and de
 ## Verification Results
 
 ### Production Build Validation
+
 Executed `npm run build` with 0 errors:
+
 - TypeScript check passed cleanly.
 - Static page generation (4/4) completed.
 - Server API route `/api/upload` generated dynamically.

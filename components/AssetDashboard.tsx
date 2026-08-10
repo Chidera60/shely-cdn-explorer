@@ -84,7 +84,7 @@ export const AssetDashboard: React.FC<AssetDashboardProps> = ({ asset, onToast }
 import { Network } from '@aptos-labs/ts-sdk';
 
 const shelby = new ShelbyClient({
-  network: Network.TESTNET,
+  network: Network.MAINNET,
   apiKey: process.env.NEXT_PUBLIC_SHELBY_API_KEY || 'anonymous',
 });
 
@@ -99,7 +99,7 @@ export async function loadAsset() {
 import { Network } from '@aptos-labs/ts-sdk';
 
 const client = new ShelbyNodeClient({
-  network: Network.TESTNET,
+  network: Network.MAINNET,
   apiKey: process.env.SHELBY_SECRET_API_KEY,
 });
 
@@ -111,7 +111,7 @@ const blobStream = await client.downloadBlob({
 import { ShelbyClient } from "@shelby-protocol/sdk/browser";
 
 const signer = Account.generate(); // Ephemeral Aptos Signer
-const shelby = new ShelbyClient({ network: "testnet" });
+const shelby = new ShelbyClient({ network: "mainnet" });
 
 // Upload payload reference:
 // Blob Name: ${asset.blobName}
@@ -226,7 +226,7 @@ curl -X GET "${asset.publicUrl}" \\
             Public Shelby RPC Endpoint
           </span>
           <span className="text-[10px] text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded font-mono font-semibold">
-            TESTNET ACTIVE
+            MAINNET ACTIVE
           </span>
         </div>
 
@@ -271,7 +271,7 @@ curl -X GET "${asset.publicUrl}" \\
             </button>
           </div>
           <p className="text-[10px] text-gray-400/80 leading-relaxed italic">
-            Note: Public testnet RPC returns &quot;Blob not found&quot; until gas is paid &amp; indexers confirm on Aptos Testnet chain. Use preview or App Edge Proxy route for instant direct testing.
+            Note: Public mainnet RPC returns &quot;Blob not found&quot; until gas is paid &amp; indexers confirm on Aptos Mainnet chain. Use preview or App Edge Proxy route for instant direct testing.
           </p>
         </div>
       </div>

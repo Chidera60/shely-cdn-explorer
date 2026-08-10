@@ -36,9 +36,9 @@ const WALLET_OPTIONS: WalletOption[] = [
   },
   {
     id: "demo",
-    name: "Shelby Testnet Demo Wallet",
-    description: "Instant zero-setup testnet account pre-funded with test APT",
-    badge: "Instant Testnet",
+    name: "Shelby Mainnet Demo Wallet",
+    description: "Instant zero-setup mainnet account",
+    badge: "Instant Mainnet",
     color: "from-shelby-cyan/20 to-shelby-indigo/20 border-shelby-cyan/40",
   },
 ];
@@ -154,7 +154,7 @@ export const WalletModal: React.FC = () => {
           <div className="mt-5 pt-4 border-t border-white/10 flex items-center justify-between text-xs text-gray-400">
             <span className="flex items-center gap-1.5">
               <ShieldCheck className="w-3.5 h-3.5 text-shelby-indigo" />
-              Secure Aptos Testnet Signer
+              Secure Aptos Mainnet Signer
             </span>
             <a
               href="https://aptoslabs.com"

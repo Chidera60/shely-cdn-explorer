@@ -102,7 +102,7 @@ export const ConnectWalletButton: React.FC = () => {
             </button>
 
             <a
-              href={`https://explorer.aptoslabs.com/account/${walletAddress}?network=testnet`}
+              href={`https://explorer.aptoslabs.com/account/${walletAddress}?network=mainnet`}
               target="_blank"
               rel="noopener noreferrer"
               className="pressable w-full text-left px-3 py-2 rounded-lg hover:bg-surface-200 text-gray-300 hover:text-white flex items-center gap-2 transition-colors"

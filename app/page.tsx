@@ -47,7 +47,7 @@ export default function Home() {
                 Store Once, Serve Globally at Edge Speed
               </h2>
               <p className="text-xs sm:text-sm text-gray-400 mt-1 max-w-2xl">
-                Upload media blobs to Shelby TESTNET using Aptos ephemeral signers. Instantly generate shareable public CDN links, inspect real-time performance metrics, and copy developer SDK snippets.
+                Upload media blobs to Shelby MAINNET using Aptos ephemeral signers. Instantly generate shareable public CDN links, inspect real-time performance metrics, and copy developer SDK snippets.
               </p>
             </div>
 
@@ -102,12 +102,12 @@ export default function Home() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-gray-400">
           <div className="flex items-center gap-2">
             <Cpu className="w-4 h-4 text-shelby-cyan" />
-            <span>Shelby Protocol • Aptos Testnet CDN Engine</span>
+            <span>Shelby Protocol • Aptos Mainnet CDN Engine</span>
           </div>
 
           <div className="flex items-center gap-6">
             <a
-              href="https://explorer.aptoslabs.com/?network=testnet"
+              href="https://explorer.aptoslabs.com/?network=mainnet"
               target="_blank"
               rel="noopener noreferrer"
               className="hover:text-white transition-colors"
