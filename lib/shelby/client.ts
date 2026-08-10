@@ -32,7 +32,7 @@ export interface ShelbyUploadResult {
 
 // Initialize browser client
 const SHELBY_API_KEY = process.env.NEXT_PUBLIC_SHELBY_API_KEY || "anonymous";
-const NETWORK = Network.MAINNET;
+const NETWORK = Network.SHELBYNET;
 const SHELBY_PUBLIC_BASE_URL =
   process.env.NEXT_PUBLIC_SHELBY_PUBLIC_BASE_URL ||
   "https://api.mainnet.shelby.xyz";

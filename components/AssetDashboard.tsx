@@ -1,40 +1,45 @@
 "use client";
 
-import React, { useState } from "react";
-import { 
-  Copy, 
-  Check, 
-  ExternalLink, 
-  Clock, 
-  FileText, 
-  HardDrive, 
-  Key, 
-  Activity, 
-  Code2, 
-  Play, 
-  Pause, 
-  Volume2, 
-  VolumeX, 
-  Maximize2,
-  Image as ImageIcon,
-  Video as VideoIcon,
-  Sparkles,
-  Download,
-  Calendar
-} from "lucide-react";
-import { motion, AnimatePresence } from "framer-motion";
 import { ShelbyUploadResult } from "@/lib/shelby/client";
+import { motion } from "framer-motion";
+import {
+  Activity,
+  Calendar,
+  Check,
+  Clock,
+  Code2,
+  Copy,
+  Download,
+  ExternalLink,
+  FileText,
+  HardDrive,
+  Image as ImageIcon,
+  Key,
+  Maximize2,
+  Sparkles,
+  Video as VideoIcon,
+} from "lucide-react";
+import React, { useState } from "react";
 
 interface AssetDashboardProps {
   asset: ShelbyUploadResult | null;
-  onToast: (type: "success" | "error" | "info", title: string, description?: string) => void;
+  onToast: (
+    type: "success" | "error" | "info",
+    title: string,
+    description?: string,
+  ) => void;
 }
 
-export const AssetDashboard: React.FC<AssetDashboardProps> = ({ asset, onToast }) => {
+export const AssetDashboard: React.FC<AssetDashboardProps> = ({
+  asset,
+  onToast,
+}) => {
   const [copiedUrl, setCopiedUrl] = useState(false);
   const [copiedSnippet, setCopiedSnippet] = useState(false);
   const [copiedBlob, setCopiedBlob] = useState(false);
-  const [activeSnippetTab, setActiveSnippetTab] = useState<"react" | "node" | "aptos" | "curl">("react");
+  const [activeSnippetTab, setActiveSnippetTab] = useState<
+    "react" | "node" | "aptos" | "curl"
+  >("react");
   const [isImageModalOpen, setIsImageModalOpen] = useState(false);
 
   // Video Controls state
@@ -49,7 +54,8 @@ export const AssetDashboard: React.FC<AssetDashboardProps> = ({ asset, onToast }
         </div>
         <h3 className="text-lg font-bold text-gray-300">No Asset Loaded</h3>
         <p className="text-xs text-gray-500 mt-1 max-w-xs">
-          Upload a file on the left or lookup an existing Shelby Blob Name to view CDN previews, metadata, and code snippets.
+          Upload a file on the left or lookup an existing Shelby Blob Name to
+          view CDN previews, metadata, and code snippets.
         </p>
       </div>
     );
@@ -64,7 +70,11 @@ export const AssetDashboard: React.FC<AssetDashboardProps> = ({ asset, onToast }
     } else if (type === "snippet") {
       setCopiedSnippet(true);
       setTimeout(() => setCopiedSnippet(false), 2000);
-      onToast("success", "Code Snippet Copied!", "Integration code copied to clipboard.");
+      onToast(
+        "success",
+        "Code Snippet Copied!",
+        "Integration code copied to clipboard.",
+      );
     } else if (type === "blob") {
       setCopiedBlob(true);
       setTimeout(() => setCopiedBlob(false), 2000);
@@ -84,7 +94,7 @@ export const AssetDashboard: React.FC<AssetDashboardProps> = ({ asset, onToast }
 import { Network } from '@aptos-labs/ts-sdk';
 
 const shelby = new ShelbyClient({
-  network: Network.MAINNET,
+  network: Network.SHELBYNET,
   apiKey: process.env.NEXT_PUBLIC_SHELBY_API_KEY || 'anonymous',
 });
 
@@ -99,7 +109,7 @@ export async function loadAsset() {
 import { Network } from '@aptos-labs/ts-sdk';
 
 const client = new ShelbyNodeClient({
-  network: Network.MAINNET,
+  network: Network.SHELBYNET,
   apiKey: process.env.SHELBY_SECRET_API_KEY,
 });
 
@@ -196,8 +206,12 @@ curl -X GET "${asset.publicUrl}" \\
               <div className="w-16 h-16 rounded-2xl bg-shelby-indigo/20 border border-shelby-indigo/30 flex items-center justify-center mb-3 text-shelby-indigo">
                 <FileText className="w-8 h-8" />
               </div>
-              <h4 className="text-sm font-semibold text-white">PDF Document Preview</h4>
-              <p className="text-xs text-gray-400 mt-1">{asset.fileName} ({formatFileSize(asset.fileSize)})</p>
+              <h4 className="text-sm font-semibold text-white">
+                PDF Document Preview
+              </h4>
+              <p className="text-xs text-gray-400 mt-1">
+                {asset.fileName} ({formatFileSize(asset.fileSize)})
+              </p>
               <a
                 href={asset.localPreviewUrl || asset.publicUrl}
                 target="_blank"
@@ -212,7 +226,8 @@ curl -X GET "${asset.publicUrl}" \\
 
           {!isImage && !isVideo && !isPdf && (
             <div className="p-8 text-center text-gray-400 text-xs">
-              Preview not available natively for this MIME type. Use public CDN URL to access raw file.
+              Preview not available natively for this MIME type. Use public CDN
+              URL to access raw file.
             </div>
           )}
         </div>
@@ -242,7 +257,11 @@ curl -X GET "${asset.publicUrl}" \\
             onClick={() => copyToClipboard(asset.publicUrl, "url")}
             className="pressable flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-gradient-to-r from-shelby-cyan to-shelby-indigo text-white font-semibold text-xs shadow-md hover:brightness-110 transition-all shrink-0"
           >
-            {copiedUrl ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+            {copiedUrl ? (
+              <Check className="w-4 h-4" />
+            ) : (
+              <Copy className="w-4 h-4" />
+            )}
             <span>{copiedUrl ? "Copied" : "Copy"}</span>
           </button>
 
@@ -263,7 +282,13 @@ curl -X GET "${asset.publicUrl}" \\
           <div className="flex items-center justify-between font-mono">
             <span>App Edge Proxy Route:</span>
             <button
-              onClick={() => copyToClipboard(asset.proxyUrl || `/api/blob?account=${asset.signerAddress}&blobName=${asset.blobName}`, "url")}
+              onClick={() =>
+                copyToClipboard(
+                  asset.proxyUrl ||
+                    `/api/blob?account=${asset.signerAddress}&blobName=${asset.blobName}`,
+                  "url",
+                )
+              }
               className="pressable text-shelby-cyan hover:underline font-medium flex items-center gap-1"
             >
               <Copy className="w-3 h-3" />
@@ -271,7 +296,9 @@ curl -X GET "${asset.publicUrl}" \\
             </button>
           </div>
           <p className="text-[10px] text-gray-400/80 leading-relaxed italic">
-            Note: Public mainnet RPC returns &quot;Blob not found&quot; until gas is paid &amp; indexers confirm on Aptos Mainnet chain. Use preview or App Edge Proxy route for instant direct testing.
+            Note: Public mainnet RPC returns &quot;Blob not found&quot; until
+            gas is paid &amp; indexers confirm on Aptos Mainnet chain. Use
+            preview or App Edge Proxy route for instant direct testing.
           </p>
         </div>
       </div>
@@ -282,28 +309,36 @@ curl -X GET "${asset.publicUrl}" \\
           <span className="text-[10px] text-gray-400 flex items-center gap-1">
             <Clock className="w-3 h-3 text-shelby-cyan" /> ArrayBuffer Read
           </span>
-          <span className="text-sm font-bold text-white mt-1 font-mono">{asset.metrics.readMs} ms</span>
+          <span className="text-sm font-bold text-white mt-1 font-mono">
+            {asset.metrics.readMs} ms
+          </span>
         </div>
 
         <div className="p-3 rounded-xl bg-surface-300/80 border border-white/10 flex flex-col">
           <span className="text-[10px] text-gray-400 flex items-center gap-1">
             <Key className="w-3 h-3 text-shelby-purple" /> Signer Key Gen
           </span>
-          <span className="text-sm font-bold text-white mt-1 font-mono">{asset.metrics.signerMs} ms</span>
+          <span className="text-sm font-bold text-white mt-1 font-mono">
+            {asset.metrics.signerMs} ms
+          </span>
         </div>
 
         <div className="p-3 rounded-xl bg-surface-300/80 border border-white/10 flex flex-col">
           <span className="text-[10px] text-gray-400 flex items-center gap-1">
             <Activity className="w-3 h-3 text-shelby-emerald" /> Upload Latency
           </span>
-          <span className="text-sm font-bold text-white mt-1 font-mono">{asset.metrics.uploadMs} ms</span>
+          <span className="text-sm font-bold text-white mt-1 font-mono">
+            {asset.metrics.uploadMs} ms
+          </span>
         </div>
 
         <div className="p-3 rounded-xl bg-surface-300/80 border border-white/10 flex flex-col">
           <span className="text-[10px] text-gray-400 flex items-center gap-1">
             <Sparkles className="w-3 h-3 text-amber-400" /> Total Duration
           </span>
-          <span className="text-sm font-bold text-white mt-1 font-mono">{asset.metrics.totalMs} ms</span>
+          <span className="text-sm font-bold text-white mt-1 font-mono">
+            {asset.metrics.totalMs} ms
+          </span>
         </div>
       </div>
 
@@ -319,21 +354,33 @@ curl -X GET "${asset.publicUrl}" \\
           <div className="flex flex-col gap-1 p-2.5 rounded-lg bg-surface-200/50 border border-white/5">
             <span className="text-gray-400 font-medium">Blob Name:</span>
             <div className="flex items-center justify-between gap-2">
-              <span className="font-mono text-gray-200 truncate">{asset.blobName}</span>
+              <span className="font-mono text-gray-200 truncate">
+                {asset.blobName}
+              </span>
               <button
                 onClick={() => copyToClipboard(asset.blobName, "blob")}
                 className="pressable text-gray-400 hover:text-white"
               >
-                {copiedBlob ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                {copiedBlob ? (
+                  <Check className="w-3.5 h-3.5 text-emerald-400" />
+                ) : (
+                  <Copy className="w-3.5 h-3.5" />
+                )}
               </button>
             </div>
           </div>
 
           {/* Ephemeral Signer */}
           <div className="flex flex-col gap-1 p-2.5 rounded-lg bg-surface-200/50 border border-white/5">
-            <span className="text-gray-400 font-medium">Ephemeral Signer Address:</span>
-            <span className="font-mono text-gray-200 truncate" title={asset.signerAddress}>
-              {asset.signerAddress.slice(0, 10)}...{asset.signerAddress.slice(-8)}
+            <span className="text-gray-400 font-medium">
+              Ephemeral Signer Address:
+            </span>
+            <span
+              className="font-mono text-gray-200 truncate"
+              title={asset.signerAddress}
+            >
+              {asset.signerAddress.slice(0, 10)}...
+              {asset.signerAddress.slice(-8)}
             </span>
           </div>
 
@@ -349,7 +396,9 @@ curl -X GET "${asset.publicUrl}" \\
 
           {/* Network & Expiration */}
           <div className="flex flex-col gap-1 p-2.5 rounded-lg bg-surface-200/50 border border-white/5">
-            <span className="text-gray-400 font-medium">Network & Expiration:</span>
+            <span className="text-gray-400 font-medium">
+              Network & Expiration:
+            </span>
             <span className="font-mono text-gray-200">
               {asset.network} • 30 Days Valid
             </span>
@@ -372,7 +421,9 @@ curl -X GET "${asset.publicUrl}" \\
             <button
               onClick={() => setActiveSnippetTab("react")}
               className={`pressable px-2.5 py-1 rounded text-[11px] font-semibold transition-all ${
-                activeSnippetTab === "react" ? "bg-shelby-indigo text-white shadow" : "text-gray-400 hover:text-gray-200"
+                activeSnippetTab === "react"
+                  ? "bg-shelby-indigo text-white shadow"
+                  : "text-gray-400 hover:text-gray-200"
               }`}
             >
               React / Next.js
@@ -380,7 +431,9 @@ curl -X GET "${asset.publicUrl}" \\
             <button
               onClick={() => setActiveSnippetTab("node")}
               className={`pressable px-2.5 py-1 rounded text-[11px] font-semibold transition-all ${
-                activeSnippetTab === "node" ? "bg-shelby-indigo text-white shadow" : "text-gray-400 hover:text-gray-200"
+                activeSnippetTab === "node"
+                  ? "bg-shelby-indigo text-white shadow"
+                  : "text-gray-400 hover:text-gray-200"
               }`}
             >
               Node.js API
@@ -388,7 +441,9 @@ curl -X GET "${asset.publicUrl}" \\
             <button
               onClick={() => setActiveSnippetTab("aptos")}
               className={`pressable px-2.5 py-1 rounded text-[11px] font-semibold transition-all ${
-                activeSnippetTab === "aptos" ? "bg-shelby-indigo text-white shadow" : "text-gray-400 hover:text-gray-200"
+                activeSnippetTab === "aptos"
+                  ? "bg-shelby-indigo text-white shadow"
+                  : "text-gray-400 hover:text-gray-200"
               }`}
             >
               Aptos SDK
@@ -396,7 +451,9 @@ curl -X GET "${asset.publicUrl}" \\
             <button
               onClick={() => setActiveSnippetTab("curl")}
               className={`pressable px-2.5 py-1 rounded text-[11px] font-semibold transition-all ${
-                activeSnippetTab === "curl" ? "bg-shelby-indigo text-white shadow" : "text-gray-400 hover:text-gray-200"
+                activeSnippetTab === "curl"
+                  ? "bg-shelby-indigo text-white shadow"
+                  : "text-gray-400 hover:text-gray-200"
               }`}
             >
               cURL
@@ -407,10 +464,16 @@ curl -X GET "${asset.publicUrl}" \\
         {/* Code Snippet Container */}
         <div className="relative p-4 bg-surface-400 text-xs font-mono text-gray-200 overflow-x-auto code-scroll">
           <button
-            onClick={() => copyToClipboard(getSnippets()[activeSnippetTab], "snippet")}
+            onClick={() =>
+              copyToClipboard(getSnippets()[activeSnippetTab], "snippet")
+            }
             className="pressable absolute top-3 right-3 flex items-center gap-1 px-2.5 py-1 rounded-lg bg-surface-200 hover:bg-surface-100 border border-white/10 text-gray-300 text-[11px] transition-colors"
           >
-            {copiedSnippet ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+            {copiedSnippet ? (
+              <Check className="w-3.5 h-3.5 text-emerald-400" />
+            ) : (
+              <Copy className="w-3.5 h-3.5" />
+            )}
             <span>{copiedSnippet ? "Copied" : "Copy Code"}</span>
           </button>
 

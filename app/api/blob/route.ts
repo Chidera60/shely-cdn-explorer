@@ -22,7 +22,7 @@ export async function GET(req: NextRequest) {
       process.env.NEXT_PUBLIC_SHELBY_API_KEY ||
       "anonymous";
     const client = new ShelbyNodeClient({
-      network: Network.MAINNET,
+      network: Network.SHELBYNET,
       apiKey,
     });
 

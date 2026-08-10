@@ -65,7 +65,7 @@ export async function POST(req: NextRequest) {
 
     // Node client initialization
     const nodeClient = new ShelbyNodeClient({
-      network: Network.MAINNET,
+      network: Network.SHELBYNET,
       apiKey: apiKey,
     });
 
