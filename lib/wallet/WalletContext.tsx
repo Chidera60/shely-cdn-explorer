@@ -179,25 +179,34 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         return { success: true };
       }
 
-      // 2. Real Browser Extension Connection
+      // 2. Real Browser Extension Connection (Aptos Wallet Standard / AIP-62)
       const win = typeof window !== "undefined" ? (window as any) : {};
       let extensionProvider: any = null;
       let displayName = "Aptos Wallet";
 
       if (type === "petra") {
-        extensionProvider = win.petra || (win.aptos && win.aptos.isPetra ? win.aptos : null);
         displayName = "Petra Wallet";
+        // Always prioritize window.aptos (Aptos Standard) to avoid the deprecated window.petra proxy
+        if (win.aptos) {
+          extensionProvider = win.aptos;
+        } else if (win.petra && typeof win.petra.connect === "function") {
+          extensionProvider = win.petra;
+        }
       } else if (type === "pontem") {
-        extensionProvider = win.pontem;
         displayName = "Pontem Wallet";
+        if (win.pontem && typeof win.pontem.connect === "function") {
+          extensionProvider = win.pontem;
+        } else if (win.aptos) {
+          extensionProvider = win.aptos;
+        }
       } else if (type === "standard") {
-        extensionProvider = win.aptos;
         displayName = "Aptos Standard Wallet";
+        extensionProvider = win.aptos;
       }
 
       // Extension is NOT installed: Report clear error, do NOT fake connection
-      if (!extensionProvider) {
-        const errorMsg = `${displayName} extension is not installed in your browser.`;
+      if (!extensionProvider || typeof extensionProvider.connect !== "function") {
+        const errorMsg = `${displayName} is not detected in your browser.`;
         setState((prev) => ({
           ...prev,
           isConnecting: false,
@@ -206,10 +215,26 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         return { success: false, error: errorMsg };
       }
 
-      // Connect to the extension
+      // Connect to the extension via Aptos Standard API
       const response = await extensionProvider.connect();
-      const account = await extensionProvider.account();
-      const rawAddress = account?.address || response?.address || response?.account?.address;
+      let rawAddress = "";
+
+      if (typeof extensionProvider.account === "function") {
+        try {
+          const account = await extensionProvider.account();
+          rawAddress = account?.address || "";
+        } catch (accErr) {
+          console.warn("Could not retrieve address from extension account() call:", accErr);
+        }
+      }
+
+      if (!rawAddress) {
+        rawAddress =
+          response?.address ||
+          response?.account?.address ||
+          response?.args?.address ||
+          "";
+      }
       
       if (!rawAddress) {
         throw new Error("Could not retrieve account address from wallet.");
@@ -289,7 +314,7 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
     try {
       const win = typeof window !== "undefined" ? (window as any) : {};
-      const aptos = win.aptos || win.petra;
+      const aptos = win.aptos || (win.pontem && typeof win.pontem.signMessage === "function" ? win.pontem : null);
       let txHash = "";
 
       if (aptos && !state.isSandbox) {
