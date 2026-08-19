@@ -6,7 +6,15 @@ const nextConfig = {
     remotePatterns: [
       {
         protocol: 'https',
-        hostname: '**',
+        hostname: 'api.mainnet.shelby.xyz',
+      },
+      {
+        protocol: 'https',
+        hostname: 'api.testnet.shelby.xyz',
+      },
+      {
+        protocol: 'https',
+        hostname: '*.shelby.xyz',
       },
     ],
   },

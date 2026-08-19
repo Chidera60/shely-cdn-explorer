@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
-import { Search, ArrowRight, Database } from "lucide-react";
+import { Search, ArrowRight, Database, Loader2 } from "lucide-react";
 import { fetchByBlobName, ShelbyUploadResult } from "@/lib/shelby/client";
 
 interface ManualLookupProps {
@@ -11,8 +11,9 @@ interface ManualLookupProps {
 
 export const ManualLookup: React.FC<ManualLookupProps> = ({ onRetrieve, onToast }) => {
   const [blobInput, setBlobInput] = useState("");
+  const [isSearching, setIsSearching] = useState(false);
 
-  const handleSearch = (e: React.FormEvent) => {
+  const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();
     const query = blobInput.trim();
     if (!query) {
@@ -20,9 +21,16 @@ export const ManualLookup: React.FC<ManualLookupProps> = ({ onRetrieve, onToast 
       return;
     }
 
-    const result = fetchByBlobName(query);
-    onRetrieve(result);
-    onToast("info", "Blob Loaded", `Loaded dashboard for '${query}'.`);
+    setIsSearching(true);
+    try {
+      const result = await fetchByBlobName(query);
+      onRetrieve(result);
+      onToast("info", "Blob Loaded", `Loaded dashboard for '${query}'.`);
+    } catch (err: any) {
+      onToast("error", "Retrieval Failed", err?.message || `Could not find blob '${query}'.`);
+    } finally {
+      setIsSearching(false);
+    }
   };
 
   return (
@@ -42,16 +50,24 @@ export const ManualLookup: React.FC<ManualLookupProps> = ({ onRetrieve, onToast 
             placeholder="Enter Shelby Blob Name (e.g. uploads/1785920-avatar.png)"
             value={blobInput}
             onChange={(e) => setBlobInput(e.target.value)}
-            className="w-full bg-surface-400 border border-white/10 rounded-xl pl-9 pr-3 py-2 text-xs font-mono text-white placeholder-gray-500 focus:outline-none focus:border-shelby-cyan transition-colors"
+            disabled={isSearching}
+            className="w-full bg-surface-400 border border-white/10 rounded-xl pl-9 pr-3 py-2 text-xs font-mono text-white placeholder-gray-500 focus:outline-none focus:border-shelby-cyan transition-colors disabled:opacity-60"
           />
         </div>
 
         <button
           type="submit"
-          className="pressable flex items-center gap-1.5 px-4 py-2 rounded-xl bg-surface-100 hover:bg-surface-50 border border-white/15 text-xs font-semibold text-white shadow-md transition-all"
+          disabled={isSearching}
+          className="pressable flex items-center gap-1.5 px-4 py-2 rounded-xl bg-surface-100 hover:bg-surface-50 border border-white/15 text-xs font-semibold text-white shadow-md transition-all disabled:opacity-60"
         >
-          <span>Retrieve</span>
-          <ArrowRight className="w-3.5 h-3.5 text-shelby-cyan" />
+          {isSearching ? (
+            <Loader2 className="w-3.5 h-3.5 animate-spin text-shelby-cyan" />
+          ) : (
+            <>
+              <span>Retrieve</span>
+              <ArrowRight className="w-3.5 h-3.5 text-shelby-cyan" />
+            </>
+          )}
         </button>
       </form>
     </div>

@@ -1,9 +1,13 @@
 "use client";
 
-import React, { createContext, useContext, useState, useEffect } from "react";
+import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
+import {
+  AptosWalletAdapterProvider,
+  useWallet as useAptosAdapterWallet,
+} from "@aptos-labs/wallet-adapter-react";
 import { formatAptosAddress } from "@/lib/shelby/client";
 
-export type WalletType = "petra" | "pontem" | "standard" | "demo";
+export type WalletType = "petra" | "pontem" | "standard" | "sandbox" | string;
 
 export interface WalletState {
   isConnected: boolean;
@@ -13,6 +17,8 @@ export interface WalletState {
   balance: number; // in APT
   network: string;
   isConnecting: boolean;
+  isSandbox: boolean;
+  connectionError: string | null;
 }
 
 export interface PendingSignatureRequest {
@@ -24,30 +30,53 @@ export interface PendingSignatureRequest {
 }
 
 interface WalletContextType extends WalletState {
-  connectWallet: (type: WalletType) => Promise<boolean>;
+  connectWallet: (type: WalletType) => Promise<{ success: boolean; error?: string }>;
   disconnectWallet: () => void;
-  refreshBalance: () => void;
+  refreshBalance: () => Promise<void>;
   isWalletModalOpen: boolean;
   setIsWalletModalOpen: (open: boolean) => void;
   pendingSignature: PendingSignatureRequest | null;
   promptUploadSignature: (request: PendingSignatureRequest) => Promise<{ txHash: string; signerAddress: string }>;
   resolvePendingSignature: (confirmed: boolean) => void;
+  availableWallets: ReadonlyArray<any>;
 }
 
 const WalletContext = createContext<WalletContextType | undefined>(undefined);
 
-const DEMO_WALLET_STORAGE_KEY = "shelby_connected_demo_wallet";
+const WALLET_STORAGE_KEY = "shelby_connected_wallet_session";
 
-export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [state, setState] = useState<WalletState>({
-    isConnected: false,
-    walletAddress: null,
-    walletName: null,
-    walletType: null,
-    balance: 0,
-    network: "Aptos Mainnet",
-    isConnecting: false,
-  });
+/**
+ * Fetch real on-chain APT coin balance from Aptos Fullnode RPC
+ */
+async function fetchOnChainAptBalance(address: string): Promise<number> {
+  try {
+    const formatted = formatAptosAddress(address);
+    const res = await fetch(
+      `https://fullnode.mainnet.aptoslabs.com/v1/accounts/${formatted}/resource/0x1::coin::CoinStore%3C0x1::aptos_coin::AptosCoin%3E`,
+      { cache: "no-store" }
+    );
+    if (!res.ok) return 0;
+    const data = await res.json();
+    const octas = data?.data?.coin?.value;
+    if (octas) {
+      return Number((Number(octas) / 100000000).toFixed(4));
+    }
+  } catch (e) {
+    console.warn("Could not query on-chain Aptos balance:", e);
+  }
+  return 0;
+}
+
+const InnerWalletProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const aptos = useAptosAdapterWallet();
+
+  const [isSandboxConnected, setIsSandboxConnected] = useState(false);
+  const [sandboxAddress, setSandboxAddress] = useState<string | null>(null);
+  const [sandboxBalance, setSandboxBalance] = useState<number>(10.0);
+
+  const [realBalance, setRealBalance] = useState<number>(0);
+  const [isConnecting, setIsConnecting] = useState(false);
+  const [connectionError, setConnectionError] = useState<string | null>(null);
 
   const [isWalletModalOpen, setIsWalletModalOpen] = useState(false);
   const [pendingSignature, setPendingSignature] = useState<PendingSignatureRequest | null>(null);
@@ -56,161 +85,171 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     reject: (err: Error) => void;
   } | null>(null);
 
-  // Restore saved demo or browser connection on mount
+  // Restore saved session on mount
   useEffect(() => {
     if (typeof window === "undefined") return;
 
-    const saved = localStorage.getItem(DEMO_WALLET_STORAGE_KEY);
+    const saved = localStorage.getItem(WALLET_STORAGE_KEY);
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
         if (parsed && parsed.address) {
-          setState({
-            isConnected: true,
-            walletAddress: formatAptosAddress(parsed.address),
-            walletName: parsed.name || "Shelby Demo Wallet",
-            walletType: parsed.type || "demo",
-            balance: parsed.balance ?? 12.45,
-            network: "Aptos Mainnet",
-            isConnecting: false,
-          });
+          if (parsed.type === "sandbox") {
+            setIsSandboxConnected(true);
+            setSandboxAddress(formatAptosAddress(parsed.address));
+            setSandboxBalance(parsed.balance ?? 10.0);
+          }
         }
       } catch (e) {}
     }
   }, []);
 
-  const connectWallet = async (type: WalletType): Promise<boolean> => {
-    setState((prev) => ({ ...prev, isConnecting: true }));
+  // Update on-chain balance when official Aptos wallet connects
+  useEffect(() => {
+    if (aptos.connected && aptos.account?.address) {
+      setIsSandboxConnected(false);
+      const rawAddr = aptos.account.address.toString();
+      const addr = formatAptosAddress(rawAddr);
+
+      fetchOnChainAptBalance(addr).then((bal) => {
+        setRealBalance(bal);
+      });
+
+      const walletData = {
+        address: addr,
+        name: aptos.wallet?.name || "Aptos Wallet",
+        type: aptos.wallet?.name || "standard",
+        balance: realBalance,
+      };
+      localStorage.setItem(WALLET_STORAGE_KEY, JSON.stringify(walletData));
+    }
+  }, [aptos.connected, aptos.account?.address, aptos.wallet?.name]);
+
+  const isConnected = isSandboxConnected || (aptos.connected && !!aptos.account?.address);
+  const walletAddress = isSandboxConnected
+    ? sandboxAddress
+    : aptos.account?.address
+    ? formatAptosAddress(aptos.account.address.toString())
+    : null;
+  const walletName = isSandboxConnected
+    ? "Shelby Sandbox Account"
+    : aptos.wallet?.name || "Aptos Wallet";
+  const walletType = isSandboxConnected
+    ? "sandbox"
+    : aptos.wallet?.name?.toLowerCase().includes("petra")
+    ? "petra"
+    : aptos.wallet?.name?.toLowerCase().includes("pontem")
+    ? "pontem"
+    : "standard";
+  const balance = isSandboxConnected ? sandboxBalance : realBalance;
+  const isSandbox = isSandboxConnected;
+
+  const refreshBalance = useCallback(async () => {
+    if (!isConnected || !walletAddress) return;
+    if (isSandbox) {
+      setSandboxBalance((prev) => Math.max(0, Number((prev - 0.00045).toFixed(4))));
+    } else {
+      const realBal = await fetchOnChainAptBalance(walletAddress);
+      setRealBalance(realBal);
+    }
+  }, [isConnected, walletAddress, isSandbox]);
+
+  const connectWallet = async (type: WalletType): Promise<{ success: boolean; error?: string }> => {
+    setIsConnecting(true);
+    setConnectionError(null);
 
     try {
-      if (type === "demo") {
-        // Generate or retrieve persistent demo wallet address (64 hex characters for Aptos)
-        let demoAddress = "";
+      // 1. Sandbox Mode
+      if (type === "sandbox") {
+        let addr = "";
         if (typeof window !== "undefined") {
-          const storedKey = localStorage.getItem("shelby_demo_wallet_address");
-          if (storedKey && storedKey.length > 42) {
-            demoAddress = formatAptosAddress(storedKey);
+          const stored = localStorage.getItem("shelby_sandbox_wallet_address");
+          if (stored && stored.length > 42) {
+            addr = formatAptosAddress(stored);
           } else {
-            demoAddress = formatAptosAddress("0x" + Array.from({ length: 64 }, () => Math.floor(Math.random() * 16).toString(16)).join(""));
-            localStorage.setItem("shelby_demo_wallet_address", demoAddress);
+            addr = formatAptosAddress(
+              "0x" + Array.from({ length: 64 }, () => Math.floor(Math.random() * 16).toString(16)).join("")
+            );
+            localStorage.setItem("shelby_sandbox_wallet_address", addr);
           }
         } else {
-          demoAddress = formatAptosAddress("0x" + Array.from({ length: 64 }, () => Math.floor(Math.random() * 16).toString(16)).join(""));
+          addr = formatAptosAddress(
+            "0x" + Array.from({ length: 64 }, () => Math.floor(Math.random() * 16).toString(16)).join("")
+          );
         }
 
-        const walletData = {
-          address: demoAddress,
-          name: "Shelby Mainnet Wallet",
-          type: "demo" as WalletType,
-          balance: 14.85,
-        };
+        setIsSandboxConnected(true);
+        setSandboxAddress(addr);
+        setSandboxBalance(10.0);
 
         if (typeof window !== "undefined") {
-          localStorage.setItem(DEMO_WALLET_STORAGE_KEY, JSON.stringify(walletData));
+          localStorage.setItem(
+            WALLET_STORAGE_KEY,
+            JSON.stringify({ address: addr, name: "Shelby Sandbox Account", type: "sandbox", balance: 10.0 })
+          );
         }
 
-        setState({
-          isConnected: true,
-          walletAddress: demoAddress,
-          walletName: "Shelby Mainnet Wallet",
-          walletType: "demo",
-          balance: 14.85,
-          network: "Aptos Mainnet",
-          isConnecting: false,
-        });
-
+        setIsConnecting(false);
         setIsWalletModalOpen(false);
-        return true;
+        return { success: true };
       }
 
-      // Check browser extension window.aptos or window.petra or window.pontem
-      const aptos = typeof window !== "undefined" ? (window as any).aptos || (window as any).petra : null;
-
-      if (aptos) {
-        const response = await aptos.connect();
-        const account = await aptos.account();
-        const rawAddress = account?.address || response?.address || response?.account?.address;
-        const address = formatAptosAddress(rawAddress);
-
-        const walletData = {
-          address: address,
-          name: type === "petra" ? "Petra Wallet" : type === "pontem" ? "Pontem Wallet" : "Aptos Wallet",
-          type,
-          balance: 8.50,
-        };
-
-        if (typeof window !== "undefined") {
-          localStorage.setItem(DEMO_WALLET_STORAGE_KEY, JSON.stringify(walletData));
-        }
-
-        setState({
-          isConnected: true,
-          walletAddress: address,
-          walletName: walletData.name,
-          walletType: type,
-          balance: 8.50,
-          network: "Aptos Mainnet",
-          isConnecting: false,
-        });
-
-        setIsWalletModalOpen(false);
-        return true;
+      // 2. Real Aptos Wallet via official Aptos Adapter (AIP-62)
+      // Find matching wallet in detected wallets list
+      let targetWalletName = "";
+      if (type === "petra") {
+        const petraWallet = aptos.wallets.find((w) => w.name.toLowerCase().includes("petra"));
+        targetWalletName = petraWallet?.name || "Petra";
+      } else if (type === "pontem") {
+        const pontemWallet = aptos.wallets.find((w) => w.name.toLowerCase().includes("pontem"));
+        targetWalletName = pontemWallet?.name || "Pontem Wallet";
+      } else if (type === "standard") {
+        targetWalletName = aptos.wallets[0]?.name || "Petra";
       } else {
-        // Extension not detected, automatically fall back to creating a dedicated mainnet wallet for the user
-        let demoAddress = formatAptosAddress("0x" + Array.from({ length: 64 }, () => Math.floor(Math.random() * 16).toString(16)).join(""));
-        const walletData = {
-          address: demoAddress,
-          name: type === "petra" ? "Petra Wallet (Mainnet)" : type === "pontem" ? "Pontem Wallet (Mainnet)" : "Aptos Wallet (Mainnet)",
-          type: "demo" as WalletType,
-          balance: 10.00,
-        };
-
-        if (typeof window !== "undefined") {
-          localStorage.setItem(DEMO_WALLET_STORAGE_KEY, JSON.stringify(walletData));
-        }
-
-        setState({
-          isConnected: true,
-          walletAddress: demoAddress,
-          walletName: walletData.name,
-          walletType: type,
-          balance: 10.00,
-          network: "Aptos Mainnet",
-          isConnecting: false,
-        });
-
-        setIsWalletModalOpen(false);
-        return true;
+        targetWalletName = type;
       }
-    } catch (err) {
+
+      const isInstalled = aptos.wallets.some(
+        (w) => w.name.toLowerCase() === targetWalletName.toLowerCase() || w.name.toLowerCase().includes(type.toLowerCase())
+      );
+
+      if (!isInstalled) {
+        const errorMsg = `${type === "petra" ? "Petra" : type === "pontem" ? "Pontem" : type} Wallet is not detected in your browser.`;
+        setConnectionError(errorMsg);
+        setIsConnecting(false);
+        return { success: false, error: errorMsg };
+      }
+
+      // Connect through official AIP-62 adapter
+      await aptos.connect(targetWalletName);
+
+      setIsSandboxConnected(false);
+      setIsConnecting(false);
+      setIsWalletModalOpen(false);
+      return { success: true };
+    } catch (err: any) {
       console.error("Wallet connection failed:", err);
-      setState((prev) => ({ ...prev, isConnecting: false }));
-      return false;
+      const msg = err?.message || "Failed to connect to wallet provider.";
+      setConnectionError(msg);
+      setIsConnecting(false);
+      return { success: false, error: msg };
     }
   };
 
   const disconnectWallet = () => {
-    if (typeof window !== "undefined") {
-      localStorage.removeItem(DEMO_WALLET_STORAGE_KEY);
+    if (isSandboxConnected) {
+      setIsSandboxConnected(false);
+      setSandboxAddress(null);
     }
-    setState({
-      isConnected: false,
-      walletAddress: null,
-      walletName: null,
-      walletType: null,
-      balance: 0,
-      network: "Aptos Mainnet",
-      isConnecting: false,
-    });
-  };
-
-  const refreshBalance = () => {
-    if (!state.isConnected) return;
-    // Simulate balance reduction after transactions
-    setState((prev) => ({
-      ...prev,
-      balance: Math.max(0, Number((prev.balance - 0.00045).toFixed(4))),
-    }));
+    if (aptos.connected) {
+      try {
+        aptos.disconnect();
+      } catch (e) {}
+    }
+    if (typeof window !== "undefined") {
+      localStorage.removeItem(WALLET_STORAGE_KEY);
+    }
+    setConnectionError(null);
   };
 
   const promptUploadSignature = (
@@ -223,7 +262,7 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   };
 
   const resolvePendingSignature = async (confirmed: boolean) => {
-    if (!signatureResolver || !pendingSignature || !state.walletAddress) return;
+    if (!signatureResolver || !pendingSignature || !walletAddress) return;
 
     if (!confirmed) {
       signatureResolver.reject(new Error("User rejected wallet upload signature."));
@@ -233,35 +272,30 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     }
 
     try {
-      // If browser window.aptos is available, we can trigger signAndSubmitTransaction
-      const aptos = typeof window !== "undefined" ? (window as any).aptos || (window as any).petra : null;
       let txHash = "";
 
-      if (aptos && state.walletType !== "demo") {
+      if (!isSandbox && aptos.connected) {
         try {
-          const payload = {
-            type: "entry_function_payload",
-            function: "0x1::aptos_account::transfer",
-            type_arguments: [],
-            arguments: [state.walletAddress, "1000"],
-          };
-          const res = await aptos.signAndSubmitTransaction(payload);
-          txHash = res.hash || res;
-        } catch (e) {
-          // fallback to simulated hash if user is in mainnet mode
-          txHash = "0x" + Array.from({ length: 64 }, () => Math.floor(Math.random() * 16).toString(16)).join("");
+          const res = await aptos.signMessage({
+            message: `Shelby Protocol Storage Authorization: ${pendingSignature.blobName}`,
+            nonce: Date.now().toString(),
+          });
+          txHash =
+            typeof res === "object" && res && "signature" in res
+              ? (res as any).signature
+              : `0x${Array.from({ length: 64 }, () => Math.floor(Math.random() * 16).toString(16)).join("")}`;
+        } catch (e: any) {
+          throw new Error(e?.message || "Wallet signature was declined by user.");
         }
       } else {
-        // Generate mainnet signature hash
-        txHash = "0x" + Array.from({ length: 64 }, () => Math.floor(Math.random() * 16).toString(16)).join("");
+        txHash = `0x${Array.from({ length: 64 }, () => Math.floor(Math.random() * 16).toString(16)).join("")}`;
       }
 
-      // Deduct fee from wallet balance
-      refreshBalance();
+      await refreshBalance();
 
       signatureResolver.resolve({
         txHash,
-        signerAddress: state.walletAddress,
+        signerAddress: walletAddress,
       });
     } catch (err: any) {
       signatureResolver.reject(err || new Error("Failed to sign transaction with wallet"));
@@ -274,7 +308,15 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   return (
     <WalletContext.Provider
       value={{
-        ...state,
+        isConnected,
+        walletAddress,
+        walletName,
+        walletType,
+        balance,
+        network: "Aptos Mainnet",
+        isConnecting,
+        isSandbox,
+        connectionError,
         connectWallet,
         disconnectWallet,
         refreshBalance,
@@ -283,10 +325,24 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         pendingSignature,
         promptUploadSignature,
         resolvePendingSignature,
+        availableWallets: aptos.wallets,
       }}
     >
       {children}
     </WalletContext.Provider>
+  );
+};
+
+export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  return (
+    <AptosWalletAdapterProvider
+      autoConnect={true}
+      onError={(error) => {
+        console.warn("Aptos Wallet Adapter warning:", error);
+      }}
+    >
+      <InnerWalletProvider>{children}</InnerWalletProvider>
+    </AptosWalletAdapterProvider>
   );
 };
 

@@ -1,4 +1,4 @@
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import { 
   Upload, 
   FileUp, 
@@ -12,10 +12,11 @@ import {
   Server,
   Globe,
   Wallet,
-  KeyRound
+  KeyRound,
+  Shield
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
-import { uploadFileToShelby, ShelbyUploadResult } from "@/lib/shelby/client";
+import { uploadFileToShelby, saveToHistory, ShelbyUploadResult } from "@/lib/shelby/client";
 import { useWallet } from "@/lib/wallet/WalletContext";
 
 interface UploadSectionProps {
@@ -37,7 +38,7 @@ const ALLOWED_MIME_TYPES = [
 const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
 
 export const UploadSection: React.FC<UploadSectionProps> = ({ onUploadSuccess, onToast }) => {
-  const { isConnected, walletAddress, walletName, promptUploadSignature, setIsWalletModalOpen } = useWallet();
+  const { isConnected, walletAddress, walletName, isSandbox, promptUploadSignature, setIsWalletModalOpen } = useWallet();
 
   const [dragActive, setDragActive] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -47,6 +48,15 @@ export const UploadSection: React.FC<UploadSectionProps> = ({ onUploadSuccess, o
   const [uploadMode, setUploadMode] = useState<"browser" | "api">("browser");
 
   const inputRef = useRef<HTMLInputElement>(null);
+
+  // Memory leak cleanup on component unmount
+  useEffect(() => {
+    return () => {
+      if (previewUrl) {
+        URL.revokeObjectURL(previewUrl);
+      }
+    };
+  }, [previewUrl]);
 
   const handleDrag = (e: React.DragEvent) => {
     e.preventDefault();
@@ -69,6 +79,11 @@ export const UploadSection: React.FC<UploadSectionProps> = ({ onUploadSuccess, o
     if (file.size > MAX_FILE_SIZE) {
       onToast("error", "File Exceeds Limit", `File '${file.name}' is ${(file.size / (1024 * 1024)).toFixed(1)}MB. Maximum allowed size is 50MB.`);
       return;
+    }
+
+    // Clean up previous preview URL to avoid memory leaks
+    if (previewUrl) {
+      URL.revokeObjectURL(previewUrl);
     }
 
     setSelectedFile(file);
@@ -115,7 +130,7 @@ export const UploadSection: React.FC<UploadSectionProps> = ({ onUploadSuccess, o
     try {
       let walletInfo: { signerAddress: string; txHash?: string } | undefined = undefined;
 
-      // If user has connected their wallet, prompt them to sign the request & charge their wallet
+      // If user has connected their wallet, prompt them to sign the request
       if (isConnected && uploadMode === "browser") {
         setUploadProgressStep("Awaiting wallet transaction signature...");
         const cleanName = selectedFile.name.toLowerCase().replace(/[^a-z0-9._-]/g, '-');
@@ -135,7 +150,7 @@ export const UploadSection: React.FC<UploadSectionProps> = ({ onUploadSuccess, o
             txHash: signed.txHash,
           };
         } catch (err: any) {
-          onToast("info", "Upload Cancelled", "Wallet signature request was declined.");
+          onToast("info", "Upload Cancelled", err?.message || "Wallet signature request was declined.");
           return;
         }
       }
@@ -144,7 +159,7 @@ export const UploadSection: React.FC<UploadSectionProps> = ({ onUploadSuccess, o
       setUploadProgressStep("Initializing Shelby Client...");
 
       if (uploadMode === "browser") {
-        // Direct browser SDK upload using wallet signer
+        // Direct browser SDK upload
         const result = await uploadFileToShelby(
           selectedFile,
           previewUrl || undefined,
@@ -155,34 +170,50 @@ export const UploadSection: React.FC<UploadSectionProps> = ({ onUploadSuccess, o
         onUploadSuccess(result);
         onToast(
           "success",
-          walletInfo ? "Wallet Charged & Upload Complete!" : "Upload Complete!",
-          `Blob '${result.blobName}' created on Shelby network.${walletInfo ? ` Tx: ${walletInfo.txHash?.slice(0, 10)}...` : ""}`
+          walletInfo ? "Signed & Upload Complete!" : "Upload Complete!",
+          `Blob '${result.blobName}' created on Shelby network.${result.txHash ? ` Tx: ${result.txHash.slice(0, 10)}...` : ""}`
         );
       } else {
         // Secure Server API Route (/api/upload)
         setUploadProgressStep("Sending payload to /api/upload endpoint...");
+        const cleanName = selectedFile.name.toLowerCase().replace(/[^a-z0-9._-]/g, "-");
+        const blobName = `uploads/${Date.now()}-${cleanName}`;
         const formData = new FormData();
         formData.append("file", selectedFile);
+        formData.append("blobName", blobName);
+        if (walletInfo?.signerAddress) {
+          formData.append("signerAddress", walletInfo.signerAddress);
+        }
 
         const res = await fetch("/api/upload", {
           method: "POST",
           body: formData,
         });
 
-        const data = await res.json();
+        let data: any = {};
+        const responseText = await res.text();
+        try {
+          data = JSON.parse(responseText);
+        } catch {
+          data = { error: responseText || `Server returned HTTP ${res.status}` };
+        }
 
         if (!res.ok) {
           throw new Error(data.error || "Server upload failed.");
         }
 
+        const effectiveBlob = data.blobName || blobName;
+        const effectiveSigner = walletInfo?.signerAddress || data.signerAddress;
+
         const result: ShelbyUploadResult = {
           id: `api_${Date.now()}`,
           publicUrl: data.publicUrl,
-          blobName: data.blobName,
-          fileName: data.fileName,
-          fileSize: data.fileSize,
-          mimeType: data.mimeType,
-          signerAddress: walletInfo?.signerAddress || data.signerAddress,
+          proxyUrl: `/api/blob?account=${effectiveSigner}&blobName=${encodeURIComponent(effectiveBlob)}`,
+          blobName: effectiveBlob,
+          fileName: data.fileName || selectedFile.name,
+          fileSize: data.fileSize || selectedFile.size,
+          mimeType: data.mimeType || selectedFile.type,
+          signerAddress: effectiveSigner,
           txHash: walletInfo?.txHash || data.txHash,
           expirationMicros: data.expirationMicros,
           timestamp: data.timestamp,
@@ -197,8 +228,9 @@ export const UploadSection: React.FC<UploadSectionProps> = ({ onUploadSuccess, o
           network: "MAINNET",
         };
 
+        saveToHistory({ ...result, localPreviewUrl: undefined });
         onUploadSuccess(result);
-        onToast("success", "API Upload Successful!", `Asset securely processed via ShelbyNodeClient.`);
+        onToast("success", "Upload Complete!", `Asset ready at '${effectiveBlob}'.`);
       }
     } catch (err: any) {
       console.error("Upload error:", err);

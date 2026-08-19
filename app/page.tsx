@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useCallback } from "react";
 import { Header } from "@/components/Header";
 import { UploadSection } from "@/components/UploadSection";
 import { AssetDashboard } from "@/components/AssetDashboard";
@@ -14,14 +14,17 @@ export default function Home() {
   const [activeAsset, setActiveAsset] = useState<ShelbyUploadResult | null>(null);
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
 
-  const addToast = (type: "success" | "error" | "info", title: string, description?: string) => {
-    const id = `toast_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`;
-    setToasts((prev) => [...prev, { id, type, title, description }]);
-  };
+  const addToast = useCallback(
+    (type: "success" | "error" | "info", title: string, description?: string) => {
+      const id = `toast_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`;
+      setToasts((prev) => [...prev, { id, type, title, description }]);
+    },
+    [],
+  );
 
-  const removeToast = (id: string) => {
+  const removeToast = useCallback((id: string) => {
     setToasts((prev) => prev.filter((t) => t.id !== id));
-  };
+  }, []);
 
   return (
     <div className="min-h-screen flex flex-col bg-background text-gray-100 relative">
