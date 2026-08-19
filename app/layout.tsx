@@ -1,8 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
-import { WalletProvider } from "@/lib/wallet/WalletContext";
-import { WalletModal } from "@/components/WalletModal";
-import { WalletSignatureModal } from "@/components/WalletSignatureModal";
+import { Providers } from "./providers";
 
 export const metadata: Metadata = {
   title: "Shelby CDN Explorer - Decentralized Storage & Instant Media CDN",
@@ -19,11 +17,7 @@ export default function RootLayout({
   return (
     <html lang="en" className="dark">
       <body className="bg-background text-gray-100 min-h-screen flex flex-col antialiased selection:bg-shelby-indigo selection:text-white">
-        <WalletProvider>
-          {children}
-          <WalletModal />
-          <WalletSignatureModal />
-        </WalletProvider>
+        <Providers>{children}</Providers>
       </body>
     </html>
   );

@@ -93,7 +93,7 @@ export const WalletSignatureModal: React.FC = () => {
             </div>
             <div className="text-right shrink-0">
               <span className="text-[10px] uppercase text-gray-400 block font-semibold">Available</span>
-              <span className="text-xs font-bold text-emerald-400 font-mono">{balance.toFixed(4)} APT</span>
+              <span className="text-xs font-bold text-emerald-400 font-mono">{balance.toFixed(4)} ShelbyUSD</span>
             </div>
           </div>
 
@@ -115,7 +115,7 @@ export const WalletSignatureModal: React.FC = () => {
                 Storage & Gas Fee
               </span>
               <span className="font-mono font-bold text-amber-300">
-                ~{pendingSignature.estimatedFeeApt.toFixed(5)} APT
+                ~{pendingSignature.estimatedFeeShelbyUsd.toFixed(5)} ShelbyUSD
               </span>
             </div>
 
