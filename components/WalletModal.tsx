@@ -48,7 +48,7 @@ const WALLET_OPTIONS: WalletOption[] = [
 ];
 
 export const WalletModal: React.FC = () => {
-  const { isWalletModalOpen, setIsWalletModalOpen, connectWallet, isConnecting, isConnected, walletType, connectionError } = useWallet();
+  const { isWalletModalOpen, setIsWalletModalOpen, connectWallet, isConnecting, isConnected, walletType, connectionError, availableWallets } = useWallet();
   const [activeError, setActiveError] = useState<string | null>(null);
   const [missingExtension, setMissingExtension] = useState<WalletOption | null>(null);
 
@@ -144,6 +144,15 @@ export const WalletModal: React.FC = () => {
           <div className="flex flex-col gap-3">
             {WALLET_OPTIONS.map((option) => {
               const isActive = isConnected && walletType === option.id;
+              const isDetected =
+                option.id === "sandbox" ||
+                availableWallets?.some(
+                  (w) =>
+                    w.name?.toLowerCase().includes(option.id) ||
+                    (option.id === "petra" && w.name?.toLowerCase().includes("petra")) ||
+                    (option.id === "pontem" && w.name?.toLowerCase().includes("pontem")) ||
+                    (option.id === "standard" && availableWallets.length > 0)
+                );
 
               return (
                 <button
@@ -165,6 +174,11 @@ export const WalletModal: React.FC = () => {
                     <div>
                       <div className="flex items-center gap-2">
                         <h4 className="text-sm font-semibold text-white tracking-tight">{option.name}</h4>
+                        {isDetected && option.id !== "sandbox" && (
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                            Detected
+                          </span>
+                        )}
                         {option.recommended && (
                           <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">
                             Recommended
