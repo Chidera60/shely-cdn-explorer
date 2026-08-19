@@ -81,32 +81,57 @@ export function storeBlobData(blobName: string, buffer: Buffer, mimeType?: strin
  * Retrieve blob data from in-memory cache or disk cache
  */
 export function getStoredBlobData(blobName: string): StoredBlob | undefined {
+  if (!blobName) return undefined;
   const cleanBlobName = blobName.replace(/^\/+/, '');
   const key = cleanBlobName.toLowerCase();
 
-  // Check in-memory store
+  // 1. Exact in-memory match
   if (memoryBlobStore.has(key)) {
     return memoryBlobStore.get(key);
   }
 
-  // Check disk cache
-  try {
-    const filePath = getSafeCachePath(cleanBlobName);
-    if (filePath && fs.existsSync(filePath)) {
-      const buffer = fs.readFileSync(filePath);
-      const mimeType = getMimeTypeFromExt(cleanBlobName);
-      const stored: StoredBlob = {
-        blobName: cleanBlobName,
-        buffer,
-        mimeType,
-        fileName: path.basename(cleanBlobName),
-        createdAt: fs.statSync(filePath).mtimeMs,
-      };
-      memoryBlobStore.set(key, stored);
-      return stored;
+  // 2. Try prefix variations (with/without uploads/ or server- prefix)
+  const variants = [
+    key,
+    `uploads/${key.replace(/^uploads\//, '')}`,
+    key.replace(/^uploads\//, ''),
+  ];
+
+  for (const variant of variants) {
+    if (memoryBlobStore.has(variant)) {
+      return memoryBlobStore.get(variant);
     }
-  } catch (err) {
-    console.error(`[Shelby Cache] Failed to read blob '${cleanBlobName}' from disk:`, err);
+  }
+
+  // 3. Check disk cache
+  for (const variant of variants) {
+    try {
+      const filePath = getSafeCachePath(variant);
+      if (filePath && fs.existsSync(filePath)) {
+        const buffer = fs.readFileSync(filePath);
+        const mimeType = getMimeTypeFromExt(variant);
+        const stored: StoredBlob = {
+          blobName: variant,
+          buffer,
+          mimeType,
+          fileName: path.basename(variant),
+          createdAt: fs.statSync(filePath).mtimeMs,
+        };
+        memoryBlobStore.set(key, stored);
+        memoryBlobStore.set(variant, stored);
+        return stored;
+      }
+    } catch (err) {
+      console.error(`[Shelby Cache] Failed to read blob '${variant}' from disk:`, err);
+    }
+  }
+
+  // 4. Memory store suffix search (e.g. matching by filename timestamp)
+  const base = path.basename(key);
+  for (const [storedKey, storedVal] of memoryBlobStore.entries()) {
+    if (storedKey.includes(base) || base.includes(path.basename(storedKey))) {
+      return storedVal;
+    }
   }
 
   return undefined;

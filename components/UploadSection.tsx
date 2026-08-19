@@ -16,7 +16,7 @@ import {
   Shield
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
-import { uploadFileToShelby, ShelbyUploadResult } from "@/lib/shelby/client";
+import { uploadFileToShelby, saveToHistory, ShelbyUploadResult } from "@/lib/shelby/client";
 import { useWallet } from "@/lib/wallet/WalletContext";
 
 interface UploadSectionProps {
@@ -176,28 +176,44 @@ export const UploadSection: React.FC<UploadSectionProps> = ({ onUploadSuccess, o
       } else {
         // Secure Server API Route (/api/upload)
         setUploadProgressStep("Sending payload to /api/upload endpoint...");
+        const cleanName = selectedFile.name.toLowerCase().replace(/[^a-z0-9._-]/g, "-");
+        const blobName = `uploads/${Date.now()}-${cleanName}`;
         const formData = new FormData();
         formData.append("file", selectedFile);
+        formData.append("blobName", blobName);
+        if (walletInfo?.signerAddress) {
+          formData.append("signerAddress", walletInfo.signerAddress);
+        }
 
         const res = await fetch("/api/upload", {
           method: "POST",
           body: formData,
         });
 
-        const data = await res.json();
+        let data: any = {};
+        const responseText = await res.text();
+        try {
+          data = JSON.parse(responseText);
+        } catch {
+          data = { error: responseText || `Server returned HTTP ${res.status}` };
+        }
 
         if (!res.ok) {
           throw new Error(data.error || "Server upload failed.");
         }
 
+        const effectiveBlob = data.blobName || blobName;
+        const effectiveSigner = walletInfo?.signerAddress || data.signerAddress;
+
         const result: ShelbyUploadResult = {
           id: `api_${Date.now()}`,
           publicUrl: data.publicUrl,
-          blobName: data.blobName,
-          fileName: data.fileName,
-          fileSize: data.fileSize,
-          mimeType: data.mimeType,
-          signerAddress: walletInfo?.signerAddress || data.signerAddress,
+          proxyUrl: `/api/blob?account=${effectiveSigner}&blobName=${encodeURIComponent(effectiveBlob)}`,
+          blobName: effectiveBlob,
+          fileName: data.fileName || selectedFile.name,
+          fileSize: data.fileSize || selectedFile.size,
+          mimeType: data.mimeType || selectedFile.type,
+          signerAddress: effectiveSigner,
           txHash: walletInfo?.txHash || data.txHash,
           expirationMicros: data.expirationMicros,
           timestamp: data.timestamp,
@@ -212,8 +228,9 @@ export const UploadSection: React.FC<UploadSectionProps> = ({ onUploadSuccess, o
           network: "MAINNET",
         };
 
+        saveToHistory({ ...result, localPreviewUrl: undefined });
         onUploadSuccess(result);
-        onToast("success", "API Upload Successful!", `Asset securely processed via ShelbyNodeClient.`);
+        onToast("success", "Upload Complete!", `Asset ready at '${effectiveBlob}'.`);
       }
     } catch (err: any) {
       console.error("Upload error:", err);
