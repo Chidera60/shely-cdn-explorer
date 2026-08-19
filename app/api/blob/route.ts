@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { ShelbyNodeClient } from "@shelby-protocol/sdk/node";
 import { Network, AccountAddress } from "@aptos-labs/ts-sdk";
+import { getStoredBlobData } from "@/lib/shelby/storage";
 
 export const dynamic = "force-dynamic";
 
@@ -16,17 +17,48 @@ export async function GET(req: NextRequest) {
     );
   }
 
+  // 1. Check local edge cache first
+  const cached = getStoredBlobData(blobName);
+  if (cached) {
+    return new NextResponse(new Uint8Array(cached.buffer), {
+      status: 200,
+      headers: {
+        "Content-Type": cached.mimeType,
+        "Content-Length": cached.buffer.length.toString(),
+        "Cache-Control": "public, max-age=31536000, immutable",
+        "Access-Control-Allow-Origin": "*",
+        "X-Shelby-Cache": "HIT",
+      },
+    });
+  }
+
+  // 2. Validate Aptos account address format
+  let accountAddress: AccountAddress;
+  try {
+    accountAddress = AccountAddress.from(account);
+  } catch (err) {
+    return NextResponse.json(
+      { error: `Invalid Aptos account address format: '${account}'` },
+      { status: 400 },
+    );
+  }
+
   try {
     const apiKey =
       process.env.SHELBY_SECRET_API_KEY ||
       process.env.NEXT_PUBLIC_SHELBY_API_KEY ||
       "anonymous";
+
+    const targetNetwork =
+      process.env.NEXT_PUBLIC_SHELBY_NETWORK === "testnet"
+        ? Network.TESTNET
+        : (((Network as any).SHELBYNET || Network.TESTNET) as any);
+
     const client = new ShelbyNodeClient({
-      network: Network.SHELBYNET,
+      network: targetNetwork,
       apiKey,
     });
 
-    const accountAddress = AccountAddress.from(account);
     const blobResponse = await client.download({
       account: accountAddress,
       blobName,
@@ -61,6 +93,7 @@ export async function GET(req: NextRequest) {
 
     headers.set("Cache-Control", "public, max-age=31536000, immutable");
     headers.set("Access-Control-Allow-Origin", "*");
+    headers.set("X-Shelby-Cache", "MISS");
 
     return new Response(blobResponse.readable as any, {
       status: 200,

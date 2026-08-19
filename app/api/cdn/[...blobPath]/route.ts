@@ -1,10 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { getStoredBlobData, getSafeCachePath, getMimeTypeFromExt } from '@/lib/shelby/storage';
 import fs from 'fs';
-import path from 'path';
 
 export const dynamic = 'force-dynamic';
-
-const CACHE_DIR = path.join(process.cwd(), '.shelby_cache');
 
 /**
  * High-Availability CDN Edge Delivery Route
@@ -20,14 +18,28 @@ export async function GET(
       return NextResponse.json({ error: 'Missing blob path' }, { status: 400 });
     }
 
-    const filePath = path.join(CACHE_DIR, blobPath);
+    // 1. Check in-memory/disk store via storage manager
+    const stored = getStoredBlobData(blobPath);
+    if (stored) {
+      return new NextResponse(new Uint8Array(stored.buffer), {
+        status: 200,
+        headers: {
+          'Content-Type': stored.mimeType,
+          'Content-Length': stored.buffer.length.toString(),
+          'Cache-Control': 'public, max-age=31536000, immutable',
+          'Access-Control-Allow-Origin': '*',
+          'X-Shelby-CDN-Status': 'HIT',
+        },
+      });
+    }
 
-    // Security check to prevent directory traversal
-    if (!filePath.startsWith(CACHE_DIR)) {
+    // 2. Safe disk path check
+    const safePath = getSafeCachePath(blobPath);
+    if (!safePath) {
       return NextResponse.json({ error: 'Access denied' }, { status: 403 });
     }
 
-    if (!fs.existsSync(filePath)) {
+    if (!fs.existsSync(safePath)) {
       return NextResponse.json(
         {
           error: 'Blob not found',
@@ -37,21 +49,10 @@ export async function GET(
       );
     }
 
-    const fileBuffer = fs.readFileSync(filePath);
-    const ext = path.extname(filePath).toLowerCase();
+    const fileBuffer = fs.readFileSync(safePath);
+    const contentType = getMimeTypeFromExt(safePath);
 
-    // Determine MIME type
-    let contentType = 'application/octet-stream';
-    if (ext === '.png') contentType = 'image/png';
-    else if (ext === '.jpg' || ext === '.jpeg') contentType = 'image/jpeg';
-    else if (ext === '.gif') contentType = 'image/gif';
-    else if (ext === '.webp') contentType = 'image/webp';
-    else if (ext === '.svg') contentType = 'image/svg+xml';
-    else if (ext === '.mp4') contentType = 'video/mp4';
-    else if (ext === '.webm') contentType = 'video/webm';
-    else if (ext === '.pdf') contentType = 'application/pdf';
-
-    return new NextResponse(fileBuffer, {
+    return new NextResponse(new Uint8Array(fileBuffer), {
       status: 200,
       headers: {
         'Content-Type': contentType,

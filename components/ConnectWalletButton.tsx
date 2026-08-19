@@ -6,7 +6,7 @@ import { Wallet, ChevronDown, Copy, Check, ExternalLink, LogOut, Coins, ShieldCh
 import { useWallet } from "@/lib/wallet/WalletContext";
 
 export const ConnectWalletButton: React.FC = () => {
-  const { isConnected, walletAddress, walletName, balance, setIsWalletModalOpen, disconnectWallet } = useWallet();
+  const { isConnected, walletAddress, walletName, balance, isSandbox, setIsWalletModalOpen, disconnectWallet } = useWallet();
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [copied, setCopied] = useState(false);
 
@@ -55,13 +55,17 @@ export const ConnectWalletButton: React.FC = () => {
         className="pressable flex items-center gap-2.5 px-3 py-1.5 rounded-xl bg-surface-200 hover:bg-surface-100 border border-white/15 text-xs font-medium text-white transition-all shadow-md"
       >
         <span className="relative flex h-2 w-2">
-          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
-          <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
+          <span className={`animate-ping absolute inline-flex h-full w-full rounded-full ${isSandbox ? "bg-cyan-400" : "bg-emerald-400"} opacity-75`} />
+          <span className={`relative inline-flex rounded-full h-2 w-2 ${isSandbox ? "bg-cyan-500" : "bg-emerald-500"}`} />
         </span>
 
         <span className="font-mono font-semibold">{truncatedAddress}</span>
 
-        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-emerald-500/10 text-emerald-400 font-mono font-bold text-[11px] border border-emerald-500/20">
+        <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md font-mono font-bold text-[11px] border ${
+          isSandbox 
+            ? "bg-cyan-500/10 text-cyan-400 border-cyan-500/20" 
+            : "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
+        }`}>
           <Coins className="w-3 h-3" />
           {balance.toFixed(2)} APT
         </span>

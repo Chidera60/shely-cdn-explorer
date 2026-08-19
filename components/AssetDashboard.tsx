@@ -18,8 +18,9 @@ import {
   Maximize2,
   Sparkles,
   Video as VideoIcon,
+  X,
 } from "lucide-react";
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 
 interface AssetDashboardProps {
   asset: ShelbyUploadResult | null;
@@ -42,9 +43,18 @@ export const AssetDashboard: React.FC<AssetDashboardProps> = ({
   >("react");
   const [isImageModalOpen, setIsImageModalOpen] = useState(false);
 
-  // Video Controls state
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [isMuted, setIsMuted] = useState(false);
+  // Close image modal on Escape key
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setIsImageModalOpen(false);
+      }
+    };
+    if (isImageModalOpen) {
+      window.addEventListener("keydown", handleKeyDown);
+    }
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [isImageModalOpen]);
 
   if (!asset) {
     return (
@@ -83,6 +93,7 @@ export const AssetDashboard: React.FC<AssetDashboardProps> = ({
   };
 
   const formatFileSize = (bytes: number) => {
+    if (!bytes || bytes === 0) return "Edge Blob";
     if (bytes < 1024) return `${bytes} B`;
     if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
     return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
@@ -94,34 +105,35 @@ export const AssetDashboard: React.FC<AssetDashboardProps> = ({
 import { Network } from '@aptos-labs/ts-sdk';
 
 const shelby = new ShelbyClient({
-  network: Network.SHELBYNET,
+  network: Network.MAINNET,
   apiKey: process.env.NEXT_PUBLIC_SHELBY_API_KEY || 'anonymous',
 });
 
-// Fetch blob content directly by Shelby Blob Name
+// Download blob content directly by account and blobName
 export async function loadAsset() {
-  const blob = await shelby.getBlob({
+  const blob = await shelby.download({
+    account: '${asset.signerAddress}',
     blobName: '${asset.blobName}',
   });
   return blob;
 }`,
       node: `import { ShelbyNodeClient } from '@shelby-protocol/sdk/node';
-import { Network } from '@aptos-labs/ts-sdk';
+import { Network, AccountAddress } from '@aptos-labs/ts-sdk';
 
 const client = new ShelbyNodeClient({
-  network: Network.SHELBYNET,
+  network: Network.MAINNET,
   apiKey: process.env.SHELBY_SECRET_API_KEY,
 });
 
 // Secure server-side download stream
-const blobStream = await client.downloadBlob({
+const blobStream = await client.download({
+  account: AccountAddress.from('${asset.signerAddress}'),
   blobName: '${asset.blobName}',
 });`,
-      aptos: `import { Account } from "@aptos-labs/ts-sdk";
+      aptos: `import { Account, Network } from "@aptos-labs/ts-sdk";
 import { ShelbyClient } from "@shelby-protocol/sdk/browser";
 
-const signer = Account.generate(); // Ephemeral Aptos Signer
-const shelby = new ShelbyClient({ network: "mainnet" });
+const shelby = new ShelbyClient({ network: Network.MAINNET });
 
 // Upload payload reference:
 // Blob Name: ${asset.blobName}
@@ -136,6 +148,7 @@ curl -X GET "${asset.publicUrl}" \\
   const isImage = asset.mimeType.startsWith("image/");
   const isVideo = asset.mimeType.startsWith("video/");
   const isPdf = asset.mimeType === "application/pdf";
+  const mediaSrc = asset.localPreviewUrl || asset.proxyUrl || asset.publicUrl;
 
   return (
     <motion.div
@@ -161,7 +174,7 @@ curl -X GET "${asset.publicUrl}" \\
               {asset.mimeType}
             </span>
             <a
-              href={asset.localPreviewUrl || asset.publicUrl}
+              href={mediaSrc}
               target="_blank"
               rel="noopener noreferrer"
               className="pressable p-1.5 rounded-lg bg-surface-100 hover:bg-surface-50 text-gray-300 transition-colors"
@@ -177,12 +190,13 @@ curl -X GET "${asset.publicUrl}" \\
           {isImage && (
             <div className="relative group w-full h-full flex items-center justify-center p-4">
               <img
-                src={asset.localPreviewUrl || asset.publicUrl}
+                src={mediaSrc}
                 alt={asset.fileName}
                 className="max-h-[300px] object-contain rounded-lg shadow-xl cursor-pointer hover:scale-[1.01] transition-transform"
                 onClick={() => setIsImageModalOpen(true)}
               />
               <button
+                type="button"
                 onClick={() => setIsImageModalOpen(true)}
                 className="pressable absolute bottom-3 right-3 p-2 rounded-lg bg-black/60 backdrop-blur-md text-white border border-white/20 opacity-0 group-hover:opacity-100 transition-opacity"
               >
@@ -194,7 +208,7 @@ curl -X GET "${asset.publicUrl}" \\
           {isVideo && (
             <div className="w-full h-full flex items-center justify-center p-2">
               <video
-                src={asset.localPreviewUrl || asset.publicUrl}
+                src={mediaSrc}
                 controls
                 className="max-h-[300px] w-full rounded-lg shadow-xl"
               />
@@ -210,10 +224,10 @@ curl -X GET "${asset.publicUrl}" \\
                 PDF Document Preview
               </h4>
               <p className="text-xs text-gray-400 mt-1">
-                {asset.fileName} ({formatFileSize(asset.fileSize)})
+                {asset.fileName} {asset.fileSize > 0 ? `(${formatFileSize(asset.fileSize)})` : ""}
               </p>
               <a
-                href={asset.localPreviewUrl || asset.publicUrl}
+                href={mediaSrc}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="pressable mt-4 inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-shelby-indigo text-white text-xs font-semibold shadow-lg hover:bg-shelby-indigo/90 transition-all"
@@ -296,9 +310,8 @@ curl -X GET "${asset.publicUrl}" \\
             </button>
           </div>
           <p className="text-[10px] text-gray-400/80 leading-relaxed italic">
-            Note: Public mainnet RPC returns &quot;Blob not found&quot; until
-            gas is paid &amp; indexers confirm on Aptos Mainnet chain. Use
-            preview or App Edge Proxy route for instant direct testing.
+            Note: Public mainnet RPC endpoints require mainnet confirmation. Use
+            the Edge Proxy route for instant direct verification.
           </p>
         </div>
       </div>
@@ -325,7 +338,7 @@ curl -X GET "${asset.publicUrl}" \\
 
         <div className="p-3 rounded-xl bg-surface-300/80 border border-white/10 flex flex-col">
           <span className="text-[10px] text-gray-400 flex items-center gap-1">
-            <Activity className="w-3 h-3 text-shelby-emerald" /> Upload Latency
+            <Activity className="w-3 h-3 text-emerald-400" /> Upload Latency
           </span>
           <span className="text-sm font-bold text-white mt-1 font-mono">
             {asset.metrics.uploadMs} ms
@@ -373,7 +386,7 @@ curl -X GET "${asset.publicUrl}" \\
           {/* Ephemeral Signer */}
           <div className="flex flex-col gap-1 p-2.5 rounded-lg bg-surface-200/50 border border-white/5">
             <span className="text-gray-400 font-medium">
-              Ephemeral Signer Address:
+              Signer Address:
             </span>
             <span
               className="font-mono text-gray-200 truncate"
@@ -489,9 +502,19 @@ curl -X GET "${asset.publicUrl}" \\
           className="fixed inset-0 z-50 bg-black/90 backdrop-blur-md flex items-center justify-center p-4"
           onClick={() => setIsImageModalOpen(false)}
         >
-          <div className="relative max-w-5xl max-h-[90vh] flex items-center justify-center">
+          <button
+            type="button"
+            onClick={() => setIsImageModalOpen(false)}
+            className="pressable absolute top-5 right-5 p-2 rounded-xl bg-surface-200 hover:bg-surface-100 text-gray-400 hover:text-white transition-colors z-10"
+          >
+            <X className="w-5 h-5" />
+          </button>
+          <div
+            className="relative max-w-5xl max-h-[90vh] flex items-center justify-center"
+            onClick={(e) => e.stopPropagation()}
+          >
             <img
-              src={asset.localPreviewUrl || asset.publicUrl}
+              src={mediaSrc}
               alt={asset.fileName}
               className="max-h-[85vh] max-w-full rounded-xl object-contain shadow-2xl"
             />

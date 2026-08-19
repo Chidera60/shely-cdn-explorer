@@ -14,8 +14,20 @@ export interface StoredBlob {
   createdAt: number;
 }
 
-const CACHE_DIR = path.join(process.cwd(), '.shelby_cache');
+export const CACHE_DIR = path.join(process.cwd(), '.shelby_cache');
 const memoryBlobStore = new Map<string, StoredBlob>();
+
+/**
+ * Safely resolves a blob path within CACHE_DIR, returning null if traversal is attempted.
+ */
+export function getSafeCachePath(blobPath: string): string | null {
+  const normalized = path.normalize(blobPath).replace(/^(\.\.(\/|\\|$))+/, '');
+  const resolved = path.resolve(CACHE_DIR, normalized);
+  if (!resolved.startsWith(CACHE_DIR + path.sep) && resolved !== CACHE_DIR) {
+    return null;
+  }
+  return resolved;
+}
 
 /**
  * Determine MIME type based on file extension
@@ -50,14 +62,16 @@ export function storeBlobData(blobName: string, buffer: Buffer, mimeType?: strin
     createdAt: Date.now(),
   });
 
-  // 2. Persist to disk cache
+  // 2. Persist to disk cache safely
   try {
-    const filePath = path.join(CACHE_DIR, cleanBlobName);
-    const dir = path.dirname(filePath);
-    if (!fs.existsSync(dir)) {
-      fs.mkdirSync(dir, { recursive: true });
+    const filePath = getSafeCachePath(cleanBlobName);
+    if (filePath) {
+      const dir = path.dirname(filePath);
+      if (!fs.existsSync(dir)) {
+        fs.mkdirSync(dir, { recursive: true });
+      }
+      fs.writeFileSync(filePath, buffer);
     }
-    fs.writeFileSync(filePath, buffer);
   } catch (err) {
     console.error(`[Shelby Cache] Failed to write blob '${cleanBlobName}' to disk:`, err);
   }
@@ -77,8 +91,8 @@ export function getStoredBlobData(blobName: string): StoredBlob | undefined {
 
   // Check disk cache
   try {
-    const filePath = path.join(CACHE_DIR, cleanBlobName);
-    if (fs.existsSync(filePath)) {
+    const filePath = getSafeCachePath(cleanBlobName);
+    if (filePath && fs.existsSync(filePath)) {
       const buffer = fs.readFileSync(filePath);
       const mimeType = getMimeTypeFromExt(cleanBlobName);
       const stored: StoredBlob = {
