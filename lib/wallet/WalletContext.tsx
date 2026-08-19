@@ -1,16 +1,19 @@
 "use client";
 
 import React, { createContext, useContext, useState, useEffect } from "react";
-import { formatAptosAddress } from "@/lib/shelby/client";
+import { useWallet as useAdapterWallet } from "@aptos-labs/wallet-adapter-react";
+import { Aptos, AptosConfig, Network } from "@aptos-labs/ts-sdk";
+import { SHELBYUSD_FA_METADATA_ADDRESS } from "@shelby-protocol/sdk/browser";
+import { formatAptosAddress, getOrCreateSigner } from "@/lib/shelby/client";
 
-export type WalletType = "petra" | "pontem" | "standard" | "demo";
+export type WalletType = "petra" | "pontem" | "standard";
 
 export interface WalletState {
   isConnected: boolean;
   walletAddress: string | null;
   walletName: string | null;
   walletType: WalletType | null;
-  balance: number; // in APT
+  balance: number; // in ShelbyUSD
   network: string;
   isConnecting: boolean;
 }
@@ -20,7 +23,7 @@ export interface PendingSignatureRequest {
   fileSize: number;
   blobName: string;
   mimeType: string;
-  estimatedFeeApt: number;
+  estimatedFeeShelbyUsd: number;
 }
 
 interface WalletContextType extends WalletState {
@@ -36,19 +39,25 @@ interface WalletContextType extends WalletState {
 
 const WalletContext = createContext<WalletContextType | undefined>(undefined);
 
-const DEMO_WALLET_STORAGE_KEY = "shelby_connected_demo_wallet";
+// Read-only Aptos client used for on-chain view calls (balance, decimals).
+// NOTE: confirm this points at the correct network for your environment
+// (Mainnet here — switch to TESTNET/DEVNET while testing with real wallets).
+const aptosConfig = new AptosConfig({ network: Network.SHELBYNET });
+const aptosReadClient = new Aptos(aptosConfig);
 
 export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [state, setState] = useState<WalletState>({
-    isConnected: false,
-    walletAddress: null,
-    walletName: null,
-    walletType: null,
-    balance: 0,
-    network: "Aptos Mainnet",
-    isConnecting: false,
-  });
+  const {
+    connect,
+    disconnect,
+    connected,
+    isLoading,
+    account,
+    wallet,
+    wallets,
+    signAndSubmitTransaction,
+  } = useAdapterWallet();
 
+  const [balance, setBalance] = useState(0);
   const [isWalletModalOpen, setIsWalletModalOpen] = useState(false);
   const [pendingSignature, setPendingSignature] = useState<PendingSignatureRequest | null>(null);
   const [signatureResolver, setSignatureResolver] = useState<{
@@ -56,161 +65,88 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     reject: (err: Error) => void;
   } | null>(null);
 
-  // Restore saved demo or browser connection on mount
-  useEffect(() => {
-    if (typeof window === "undefined") return;
+  const walletAddress = account?.address ? formatAptosAddress(account.address.toString()) : null;
 
-    const saved = localStorage.getItem(DEMO_WALLET_STORAGE_KEY);
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        if (parsed && parsed.address) {
-          setState({
-            isConnected: true,
-            walletAddress: formatAptosAddress(parsed.address),
-            walletName: parsed.name || "Shelby Demo Wallet",
-            walletType: parsed.type || "demo",
-            balance: parsed.balance ?? 12.45,
-            network: "Aptos Mainnet",
-            isConnecting: false,
-          });
-        }
-      } catch (e) {}
+  const fetchShelbyUsdBalance = async (address: string): Promise<number> => {
+    const [rawBalance] = await aptosReadClient.view<[string]>({
+      payload: {
+        function: "0x1::primary_fungible_store::balance",
+        typeArguments: ["0x1::fungible_asset::Metadata"],
+        functionArguments: [address, SHELBYUSD_FA_METADATA_ADDRESS],
+      },
+    });
+    const [decimalsRaw] = await aptosReadClient.view<[number]>({
+      payload: {
+        function: "0x1::fungible_asset::decimals",
+        typeArguments: ["0x1::fungible_asset::Metadata"],
+        functionArguments: [SHELBYUSD_FA_METADATA_ADDRESS],
+      },
+    });
+    return Number(rawBalance) / 10 ** Number(decimalsRaw);
+  };
+
+  // Refresh the real ShelbyUSD balance whenever the connected wallet address changes.
+  useEffect(() => {
+    if (!walletAddress) {
+      setBalance(0);
+      return;
     }
-  }, []);
+    let cancelled = false;
+    (async () => {
+      try {
+        const bal = await fetchShelbyUsdBalance(walletAddress);
+        if (!cancelled) setBalance(bal);
+      } catch (err) {
+        console.error("Failed to fetch ShelbyUSD balance:", err);
+        if (!cancelled) setBalance(0);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [walletAddress]);
 
   const connectWallet = async (type: WalletType): Promise<boolean> => {
-    setState((prev) => ({ ...prev, isConnecting: true }));
+    const match = wallets?.find((w) =>
+      type === "petra"
+        ? w.name.toLowerCase().includes("petra")
+        : type === "pontem"
+        ? w.name.toLowerCase().includes("pontem")
+        : true
+    );
+
+    if (!match) {
+      const label = type === "petra" ? "Petra" : type === "pontem" ? "Pontem" : "A compatible";
+      alert(`${label} wallet wasn't detected. Please install it and refresh the page.`);
+      if (typeof window !== "undefined") {
+        window.open(type === "pontem" ? "https://pontem.network/" : "https://petra.app/", "_blank");
+      }
+      return false;
+    }
 
     try {
-      if (type === "demo") {
-        // Generate or retrieve persistent demo wallet address (64 hex characters for Aptos)
-        let demoAddress = "";
-        if (typeof window !== "undefined") {
-          const storedKey = localStorage.getItem("shelby_demo_wallet_address");
-          if (storedKey && storedKey.length > 42) {
-            demoAddress = formatAptosAddress(storedKey);
-          } else {
-            demoAddress = formatAptosAddress("0x" + Array.from({ length: 64 }, () => Math.floor(Math.random() * 16).toString(16)).join(""));
-            localStorage.setItem("shelby_demo_wallet_address", demoAddress);
-          }
-        } else {
-          demoAddress = formatAptosAddress("0x" + Array.from({ length: 64 }, () => Math.floor(Math.random() * 16).toString(16)).join(""));
-        }
-
-        const walletData = {
-          address: demoAddress,
-          name: "Shelby Mainnet Wallet",
-          type: "demo" as WalletType,
-          balance: 14.85,
-        };
-
-        if (typeof window !== "undefined") {
-          localStorage.setItem(DEMO_WALLET_STORAGE_KEY, JSON.stringify(walletData));
-        }
-
-        setState({
-          isConnected: true,
-          walletAddress: demoAddress,
-          walletName: "Shelby Mainnet Wallet",
-          walletType: "demo",
-          balance: 14.85,
-          network: "Aptos Mainnet",
-          isConnecting: false,
-        });
-
-        setIsWalletModalOpen(false);
-        return true;
-      }
-
-      // Check browser extension window.aptos or window.petra or window.pontem
-      const aptos = typeof window !== "undefined" ? (window as any).aptos || (window as any).petra : null;
-
-      if (aptos) {
-        const response = await aptos.connect();
-        const account = await aptos.account();
-        const rawAddress = account?.address || response?.address || response?.account?.address;
-        const address = formatAptosAddress(rawAddress);
-
-        const walletData = {
-          address: address,
-          name: type === "petra" ? "Petra Wallet" : type === "pontem" ? "Pontem Wallet" : "Aptos Wallet",
-          type,
-          balance: 8.50,
-        };
-
-        if (typeof window !== "undefined") {
-          localStorage.setItem(DEMO_WALLET_STORAGE_KEY, JSON.stringify(walletData));
-        }
-
-        setState({
-          isConnected: true,
-          walletAddress: address,
-          walletName: walletData.name,
-          walletType: type,
-          balance: 8.50,
-          network: "Aptos Mainnet",
-          isConnecting: false,
-        });
-
-        setIsWalletModalOpen(false);
-        return true;
-      } else {
-        // Extension not detected, automatically fall back to creating a dedicated mainnet wallet for the user
-        let demoAddress = formatAptosAddress("0x" + Array.from({ length: 64 }, () => Math.floor(Math.random() * 16).toString(16)).join(""));
-        const walletData = {
-          address: demoAddress,
-          name: type === "petra" ? "Petra Wallet (Mainnet)" : type === "pontem" ? "Pontem Wallet (Mainnet)" : "Aptos Wallet (Mainnet)",
-          type: "demo" as WalletType,
-          balance: 10.00,
-        };
-
-        if (typeof window !== "undefined") {
-          localStorage.setItem(DEMO_WALLET_STORAGE_KEY, JSON.stringify(walletData));
-        }
-
-        setState({
-          isConnected: true,
-          walletAddress: demoAddress,
-          walletName: walletData.name,
-          walletType: type,
-          balance: 10.00,
-          network: "Aptos Mainnet",
-          isConnecting: false,
-        });
-
-        setIsWalletModalOpen(false);
-        return true;
-      }
+      await connect(match.name);
+      setIsWalletModalOpen(false);
+      return true;
     } catch (err) {
       console.error("Wallet connection failed:", err);
-      setState((prev) => ({ ...prev, isConnecting: false }));
       return false;
     }
   };
 
   const disconnectWallet = () => {
-    if (typeof window !== "undefined") {
-      localStorage.removeItem(DEMO_WALLET_STORAGE_KEY);
-    }
-    setState({
-      isConnected: false,
-      walletAddress: null,
-      walletName: null,
-      walletType: null,
-      balance: 0,
-      network: "Aptos Mainnet",
-      isConnecting: false,
-    });
+    disconnect();
+    setBalance(0);
   };
 
-  const refreshBalance = () => {
-    if (!state.isConnected) return;
-    // Simulate balance reduction after transactions
-    setState((prev) => ({
-      ...prev,
-      balance: Math.max(0, Number((prev.balance - 0.00045).toFixed(4))),
-    }));
+  const refreshBalance = async () => {
+    if (!walletAddress) return;
+    try {
+      const bal = await fetchShelbyUsdBalance(walletAddress);
+      setBalance(bal);
+    } catch (err) {
+      console.error("Failed to refresh ShelbyUSD balance:", err);
+    }
   };
 
   const promptUploadSignature = (
@@ -223,7 +159,7 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   };
 
   const resolvePendingSignature = async (confirmed: boolean) => {
-    if (!signatureResolver || !pendingSignature || !state.walletAddress) return;
+    if (!signatureResolver || !pendingSignature || !walletAddress) return;
 
     if (!confirmed) {
       signatureResolver.reject(new Error("User rejected wallet upload signature."));
@@ -233,48 +169,62 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     }
 
     try {
-      // If browser window.aptos is available, we can trigger signAndSubmitTransaction
-      const aptos = typeof window !== "undefined" ? (window as any).aptos || (window as any).petra : null;
-      let txHash = "";
+      // The ephemeral session signer that will actually perform the Shelby upload
+      // transaction (Shelby's SDK requires a raw Account, which Petra can't provide
+      // directly). The wallet here pays by funding that signer with ShelbyUSD.
+      const ephemeralSigner = getOrCreateSigner();
+      const recipientAddress = ephemeralSigner.accountAddress.toString();
 
-      if (aptos && state.walletType !== "demo") {
-        try {
-          const payload = {
-            type: "entry_function_payload",
-            function: "0x1::aptos_account::transfer",
-            type_arguments: [],
-            arguments: [state.walletAddress, "1000"],
-          };
-          const res = await aptos.signAndSubmitTransaction(payload);
-          txHash = res.hash || res;
-        } catch (e) {
-          // fallback to simulated hash if user is in mainnet mode
-          txHash = "0x" + Array.from({ length: 64 }, () => Math.floor(Math.random() * 16).toString(16)).join("");
-        }
-      } else {
-        // Generate mainnet signature hash
-        txHash = "0x" + Array.from({ length: 64 }, () => Math.floor(Math.random() * 16).toString(16)).join("");
-      }
-
-      // Deduct fee from wallet balance
-      refreshBalance();
-
-      signatureResolver.resolve({
-        txHash,
-        signerAddress: state.walletAddress,
+      const [decimalsRaw] = await aptosReadClient.view<[number]>({
+        payload: {
+          function: "0x1::fungible_asset::decimals",
+          typeArguments: ["0x1::fungible_asset::Metadata"],
+          functionArguments: [SHELBYUSD_FA_METADATA_ADDRESS],
+        },
       });
+      const decimals = Number(decimalsRaw);
+      const rawAmount = Math.round(pendingSignature.estimatedFeeShelbyUsd * 10 ** decimals);
+
+      const res = await signAndSubmitTransaction({
+        data: {
+          function: "0x1::primary_fungible_store::transfer",
+          typeArguments: ["0x1::fungible_asset::Metadata"],
+          functionArguments: [SHELBYUSD_FA_METADATA_ADDRESS, recipientAddress, rawAmount],
+        },
+      });
+
+      const txHash = res?.hash;
+      if (!txHash) throw new Error("Wallet did not return a transaction hash.");
+
+      await refreshBalance();
+
+      signatureResolver.resolve({ txHash, signerAddress: walletAddress });
     } catch (err: any) {
-      signatureResolver.reject(err || new Error("Failed to sign transaction with wallet"));
+      signatureResolver.reject(err instanceof Error ? err : new Error("Failed to sign transaction with wallet"));
     } finally {
       setPendingSignature(null);
       setSignatureResolver(null);
     }
   };
 
+  const walletType: WalletType | null = wallet?.name
+    ? wallet.name.toLowerCase().includes("petra")
+      ? "petra"
+      : wallet.name.toLowerCase().includes("pontem")
+      ? "pontem"
+      : "standard"
+    : null;
+
   return (
     <WalletContext.Provider
       value={{
-        ...state,
+        isConnected: connected,
+        walletAddress,
+        walletName: wallet?.name ?? null,
+        walletType,
+        balance,
+        network: "Shelbynet",
+        isConnecting: isLoading,
         connectWallet,
         disconnectWallet,
         refreshBalance,

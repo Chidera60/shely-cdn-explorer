@@ -127,7 +127,7 @@ export const UploadSection: React.FC<UploadSectionProps> = ({ onUploadSuccess, o
             fileSize: selectedFile.size,
             blobName,
             mimeType: selectedFile.type || "application/octet-stream",
-            estimatedFeeApt: 0.00045,
+            estimatedFeeShelbyUsd: 0.00045, // TODO: replace with a real fee calculation, this is still a placeholder
           });
 
           walletInfo = {
